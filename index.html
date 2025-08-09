@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Terminal</title>
+    <style>
+        /* CSS: サイトの見た目を設定します */
+        body {
+            background-color: #1a1a1a; /* 少し柔らかい黒 */
+            color: #f0f0f0; /* 少し柔らかい白 */
+            font-family: 'monospace', 'Courier New', Courier; /* ターミナルらしい等幅フォント */
+            font-size: 16px;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+        }
+
+        #terminal {
+            width: 100%;
+            height: 90vh; /* 画面の高さの90% */
+            overflow-y: scroll; /* 内容が増えたらスクロールできるように */
+            border: 1px solid #333;
+            padding: 10px;
+            box-sizing: border-box; /* paddingを含めてサイズ計算 */
+        }
+
+        .line {
+            display: flex;
+        }
+        
+        .prompt {
+            color: #8f8; /* プロンプトの色を緑に */
+            margin-right: 8px;
+        }
+        
+        .input-area {
+            display: flex;
+            align-items: center;
+        }
+
+        #command-line {
+            background-color: transparent; /* 背景を透明に */
+            border: none; /* 枠線をなくす */
+            color: #f0f0f0; /* 入力文字の色 */
+            font-family: inherit; /* 親要素のフォントを継承 */
+            font-size: inherit; /* 親要素のフォントサイズを継承 */
+            outline: none; /* クリックしたときの枠線をなくす */
+            width: 100%;
+        }
+
+        /* スクロールバーのスタイル（おまけ） */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1a1a1a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #555;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #777;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="terminal">
+        <div>Welcome to My Terminal!</div>
+        <div>Type 'help' to see available commands.</div>
+        <br>
+    </div>
+    
+    <div class="input-area">
+        <span class="prompt">$</span>
+        <input type="text" id="command-line" autofocus>
+    </div>
+
+    <script>
+        // JavaScript: サイトの動きを制御します
+        const terminal = document.getElementById('terminal');
+        const commandLine = document.getElementById('command-line');
+
+        // メッセージを画面に表示する関数
+        function print(message) {
+            const newLine = document.createElement('div');
+            newLine.innerHTML = message; // innerHTMLを使うとHTMLタグも解釈される
+            terminal.appendChild(newLine);
+            terminal.scrollTop = terminal.scrollHeight; // 自動で一番下までスクロール
+        }
+
+        // Enterキーが押されたときの処理
+        commandLine.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter') {
+                const command = commandLine.value.trim().toLowerCase(); // 入力されたコマンドを取得し、小文字に変換
+                
+                // 入力されたコマンドを画面に表示
+                if (command) {
+                    print(`<div class="line"><span class="prompt">$</span><div>${command}</div></div>`);
+                }
+
+                // コマンドに応じた処理を実行
+                handleCommand(command);
+
+                // 入力欄をクリア
+                commandLine.value = '';
+            }
+        });
+
+        // コマンドを処理する関数
+        function handleCommand(command) {
+            switch (command) {
+                case 'help':
+                    print("Available commands:");
+                    print("&nbsp;&nbsp;<b>about</b>    - Shows information about this site.");
+                    print("&nbsp;&nbsp;<b>contact</b>  - Shows contact information.");
+                    print("&nbsp;&nbsp;<b>clear</b>    - Clears the terminal screen.");
+                    print("&nbsp;&nbsp;<b>date</b>     - Shows the current date and time.");
+                    break;
+                
+                case 'about':
+                    print("This is a simple terminal-style website created with HTML, CSS, and JavaScript.");
+                    break;
+
+                case 'contact':
+                    print("You can find me on...<br>&nbsp;&nbsp;GitHub: my-github-account<br>&nbsp;&nbsp;Twitter: my-twitter-handle");
+                    break;
+
+                case 'clear':
+                    // 最初のメッセージだけを残して画面をクリア
+                    terminal.innerHTML = "<div>Welcome to My Terminal!</div><div>Type 'help' to see available commands.</div><br>";
+                    break;
+
+                case 'date':
+                    print(new Date().toString());
+                    break;
+
+                default:
+                    if(command) { // 何か入力されていた場合のみエラーメッセージを表示
+                        print(`Command not found: ${command}. Type 'help' for a list of commands.`);
+                    }
+                    break;
+            }
+        }
+        
+        // ページ上のどこかをクリックしたときに入力欄にフォーカスを当てる
+        document.body.addEventListener('click', function() {
+            commandLine.focus();
+        });
+
+    </script>
+</body>
+</html>
