@@ -81,6 +81,7 @@
         // JavaScript: サイトの動きを制御します
         const terminal = document.getElementById('terminal');
         const commandLine = document.getElementById('command-line');
+        const startTime = Date.now();
 
         // メッセージを画面に表示する関数
         function print(message) {
@@ -93,7 +94,7 @@
         // Enterキーが押されたときの処理
         commandLine.addEventListener('keydown', function(event) {
             if (event.key === 'Enter') {
-                const command = commandLine.value.trim().toLowerCase(); // 入力されたコマンドを取得し、小文字に変換
+                const command = commandLine.value.trim(); // 入力されたコマンドを取得
                 
                 // 入力されたコマンドを画面に表示
                 if (command) {
@@ -101,7 +102,7 @@
                 }
 
                 // コマンドに応じた処理を実行
-                handleCommand(command);
+                handleCommand(command.toLowerCase()); // コマンドは小文字で処理
 
                 // 入力欄をクリア
                 commandLine.value = '';
@@ -110,13 +111,30 @@
 
         // コマンドを処理する関数
         function handleCommand(command) {
-            switch (command) {
+            // コマンドと引数を分割する
+            const parts = command.split(' ');
+            const mainCommand = parts[0];
+            const args = parts.slice(1);
+
+            switch (mainCommand) {
                 case 'help':
                     print("Available commands:");
                     print("&nbsp;&nbsp;<b>about</b>    - Shows information about this site.");
                     print("&nbsp;&nbsp;<b>contact</b>  - Shows contact information.");
                     print("&nbsp;&nbsp;<b>clear</b>    - Clears the terminal screen.");
                     print("&nbsp;&nbsp;<b>date</b>     - Shows the current date and time.");
+                    print("&nbsp;&nbsp;<b>ls</b>       - Lists files in the current directory.");
+                    print("&nbsp;&nbsp;<b>pwd</b>      - Prints the working directory.");
+                    print("&nbsp;&nbsp;<b>cat</b> [file] - Displays the content of a file. (e.g., 'cat readme.txt')");
+                    print("&nbsp;&nbsp;<b>whoami</b>   - Shows the current user.");
+                    print("&nbsp;&nbsp;<b>uptime</b>   - Shows how long the system has been running.");
+                    print("&nbsp;&nbsp;<b>echo</b> [text] - Repeats the given text.");
+                    print("&nbsp;&nbsp;<b>fortune</b>  - Displays a random quote or joke.");
+                    print("<br>");
+                    print("<b>Dangerous Commands (Simulated):</b>");
+                    print("&nbsp;&nbsp;<b>rm -rf /</b>   - <b>(DANGER)</b> Simulates a system wipe.");
+                    print("&nbsp;&nbsp;<b>sudo reboot</b>  - <b>(DANGER)</b> Simulates a system reboot.");
+                    print("&nbsp;&nbsp;<b>dd</b>       - <b>(DANGER)</b> Simulates overwriting a disk.");
                     break;
                 
                 case 'about':
@@ -128,16 +146,111 @@
                     break;
 
                 case 'clear':
-                    // 最初のメッセージだけを残して画面をクリア
                     terminal.innerHTML = "<div>Welcome to My Terminal!</div><div>Type 'help' to see available commands.</div><br>";
                     break;
 
                 case 'date':
                     print(new Date().toString());
                     break;
+                
+                case 'ls':
+                    print("README.md&nbsp;&nbsp;&nbsp;&nbsp;about.txt&nbsp;&nbsp;&nbsp;&nbsp;contact.txt&nbsp;&nbsp;&nbsp;&nbsp;index.html");
+                    break;
+
+                case 'pwd':
+                    print("/home/guest");
+                    break;
+                    
+                case 'cat':
+                    const filename = args[0];
+                    if (!filename) {
+                        print("Usage: cat [filename]");
+                        break;
+                    }
+                    const files = {
+                        "readme.txt": "Welcome to my terminal! This is a fake file content. Use 'help' for more commands.",
+                        "about.txt": "This terminal was built by a developer who loves the command line.",
+                        "contact.txt": "Email: fake@example.com"
+                    };
+                    
+                    if (files[filename]) {
+                        print(files[filename]);
+                    } else {
+                        print(`cat: ${filename}: No such file or directory`);
+                    }
+                    break;
+
+                case 'whoami':
+                    print("guest");
+                    break;
+
+                case 'uptime':
+                    const uptimeInSeconds = Math.floor((Date.now() - startTime) / 1000);
+                    const hours = Math.floor(uptimeInSeconds / 3600);
+                    const minutes = Math.floor((uptimeInSeconds % 3600) / 60);
+                    const seconds = uptimeInSeconds % 60;
+                    print(`up ${hours} hours, ${minutes} minutes, ${seconds} seconds`);
+                    break;
+
+                case 'echo':
+                    if (args.length > 0) {
+                        print(args.join(' '));
+                    }
+                    break;
+                
+                case 'fortune':
+                    const fortunes = [
+                        "The early bird gets the worm, but the second mouse gets the cheese.",
+                        "A computer's ability to be a useful tool is proportional to its ability to be a fun toy.",
+                        "You can't have everything. Where would you put it?",
+                        "An optimist thinks this is the best of all possible worlds. A pessimist fears it is true.",
+                        "Don't worry about the world ending today. It's already tomorrow in Australia."
+                    ];
+                    const randomIndex = Math.floor(Math.random() * fortunes.length);
+                    print(fortunes[randomIndex]);
+                    break;
+                
+                // --- ここから追加した危険なコマンド ---
+                case 'rm':
+                    if (args.join(' ') === '-rf /') {
+                        print("<span style='color: red;'>Warning: This is a highly dangerous command!</span>");
+                        print("Simulating system wipe...");
+                        print("All files deleted. The system is now empty.");
+                        print("<br>");
+                        print("...Just kidding! Your terminal is safe.");
+                    } else {
+                        print("rm: cannot remove file: Is a directory (simulated)");
+                    }
+                    break;
+
+                case 'sudo':
+                    if (args[0] === 'reboot') {
+                        print("Broadcast message from systemd-journald@host (Sun 2025-08-10 11:44:26 JST):");
+                        print("<br>");
+                        print("The system is going down for reboot NOW!");
+                        print("<br>");
+                        print("...System is back online. Welcome back.");
+                    } else {
+                        print("sudo: unknown command");
+                    }
+                    break;
+                    
+                case 'dd':
+                    if (args.join(' ') === 'if=/dev/zero of=/dev/sda') {
+                        print("<span style='color: red;'>DANGER!</span> This command will completely erase your hard drive.");
+                        print("Simulating disk wipe...");
+                        print("128+0 records in");
+                        print("128+0 records out");
+                        print("65536 bytes transferred in 0.000100 secs (655360000 bytes/sec)");
+                        print("<br>");
+                        print("...Your files are still here, don't worry.");
+                    } else {
+                        print("dd: missing operand after 'dd'");
+                    }
+                    break;
 
                 default:
-                    if(command) { // 何か入力されていた場合のみエラーメッセージを表示
+                    if(command) {
                         print(`Command not found: ${command}. Type 'help' for a list of commands.`);
                     }
                     break;
