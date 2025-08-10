@@ -61,6 +61,16 @@
         ::-webkit-scrollbar-thumb:hover {
             background: #777;
         }
+        .message {
+            color: #ccc;
+        }
+        .sent {
+            color: #6495ed; /* Sent messages are cornflowerblue */
+            margin-left: 20px;
+        }
+        .received {
+            color: #f08080; /* Received messages are lightcoral */
+        }
     </style>
 </head>
 <body>
@@ -83,7 +93,13 @@
         const startTime = Date.now();
 
         let pyodide;
-        let dbConnection;
+        let myIpAddress = '127.0.0.1'; // 初期値としてローカルホストを設定
+        
+        // 擬似WebSocketサーバーからのメッセージ
+        const simulatedMessages = [
+            { sender: '192.168.1.5', content: 'Hello!', type: 'received' },
+            { sender: '192.168.1.5', content: 'How are you doing?', type: 'received' }
+        ];
 
         async function initializePyodide() {
             print("Loading Python environment... This might take a moment.");
@@ -95,14 +111,14 @@
             await pyodide.loadPackage("requests");
             print("Done. You can now use `import sqlite3` and `import requests` in python.");
             
-            // SQLiteデータベースの初期化
             print("Initializing database...");
             await initializeDB();
             print("Database ready.");
+
+            simulateRealtimeMessages();
         }
 
         async function initializeDB() {
-            // Pythonコードを実行してDB接続とテーブル作成
             await pyodide.runPythonAsync(`
                 import sqlite3
                 conn = sqlite3.connect('my_terminal.db')
@@ -120,11 +136,25 @@
             `);
         }
 
-        function print(message) {
+        function print(message, className = 'message') {
             const newLine = document.createElement('div');
+            newLine.className = className;
             newLine.innerHTML = message;
             terminal.appendChild(newLine);
             terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        function simulateRealtimeMessages() {
+            let messageIndex = 0;
+            setInterval(() => {
+                if (messageIndex < simulatedMessages.length) {
+                    const msg = simulatedMessages[messageIndex];
+                    const promptText = msg.sender === myIpAddress ? `$ ` : `${msg.sender}: `;
+                    const contentClass = msg.type === 'received' ? 'received' : 'sent';
+                    print(`<div><span class="prompt">${promptText}</span><span class="${contentClass}">${msg.content}</span></div>`);
+                    messageIndex++;
+                }
+            }, 5000); // 5秒ごとに新しいメッセージを表示
         }
 
         commandLine.addEventListener('keydown', async function(event) {
@@ -147,62 +177,32 @@
             const args = parts.slice(1);
             const fullCommand = command;
 
-            // Pythonコマンドの処理
-            if (fullCommand.startsWith('python ')) {
-                const pythonCode = fullCommand.substring(7);
-                if (pyodide) {
-                    try {
-                        let output = "";
-                        pyodide.setStdout({
-                            isatty: true,
-                            write: (buf) => {
-                                const str = new TextDecoder("utf-8").decode(buf);
-                                output += str;
-                            },
-                            flush: () => {
-                                print(output);
-                                output = "";
-                            }
-                        });
-                        const result = await pyodide.runPythonAsync(pythonCode);
-                        if (result !== undefined) {
-                            print(result);
-                        }
-                    } catch (e) {
-                        print(`<span style="color: red;">Python Error: ${e}</span>`);
-                    }
-                } else {
-                    print("Python environment is still loading. Please wait...");
-                }
-                return;
-            }
-
             // IPアドレスで始まる通信コマンドの処理
             if (mainCommand.startsWith('/')) {
-                const targetIp = mainCommand.substring(1);
+                const target = mainCommand.substring(1);
                 const message = args.join(' ');
                 
-                if (targetIp === 'ip') {
-                    // 自分のIPアドレスを取得するシミュレーション
+                if (target === 'ip') {
                     print("Fetching your IP address...");
                     try {
                         const response = await fetch('https://api.ipify.org?format=json');
                         const data = await response.json();
-                        print(`Your IP address is: ${data.ip}`);
+                        myIpAddress = data.ip; // 取得したIPを保存
+                        print(`Your IP address is: ${myIpAddress}`);
                     } catch (e) {
                         print(`<span style="color: red;">Error fetching IP: Could not connect to the service.</span>`);
                     }
                 } else {
-                    // 相手にメッセージを送信するシミュレーション
                     if (message) {
-                        print(`Sending message to ${targetIp}: "${message}"`);
+                        const sender = 'Me';
+                        const content = message;
+                        print(`<div><span class="prompt">$ ${target}: </span><span class="sent">${content}</span></div>`);
                         
-                        // データベースにメッセージを保存
                         const pythonCode = `
                             import sqlite3, datetime
                             conn = sqlite3.connect('my_terminal.db')
                             c = conn.cursor()
-                            c.execute("INSERT INTO messages VALUES (NULL, ?, ?, ?)", ('Me', '${message}', str(datetime.datetime.now())))
+                            c.execute("INSERT INTO messages VALUES (NULL, ?, ?, ?)", ('${sender}', '${content}', str(datetime.datetime.now())))
                             conn.commit()
                             conn.close()
                         `;
@@ -222,10 +222,10 @@
                     print("&nbsp;&nbsp;<b>clear</b>    - Clears the terminal screen.");
                     print("&nbsp;&nbsp;<b>ls</b>       - Lists files in the current directory.");
                     print("&nbsp;&nbsp;<b>upload</b>   - Uploads a file to the virtual filesystem.");
-                    print("&nbsp;&nbsp;<b>pip -r</b> [file] - Installs packages from a requirements file. (e.g., 'pip -r requirements.txt')");
+                    print("&nbsp;&nbsp;<b>pip -r</b> [file] - Installs packages from a requirements file.");
                     print("&nbsp;&nbsp;<b>/ip</b>      - Shows your IP address. (Simulated)");
                     print("&nbsp;&nbsp;<b>/[ip]</b> [message] - Sends a message to another IP. (Simulated)");
-                    print("&nbsp;&nbsp;<b>cat</b> [file] - Displays the content of a file. (e.g., 'cat readme.txt')");
+                    print("&nbsp;&nbsp;<b>cat</b> [file] - Displays the content of a file.");
                     print("&nbsp;&nbsp;<b>sql</b> [query] - Executes a SQL query on the internal database.");
                     print("<br>");
                     print("<b>Dangerous Commands (Simulated):</b>");
@@ -314,12 +314,12 @@
                         print("Usage: sql [query]");
                         return;
                     }
-                    const pythonSqlCode = `
-                        import sqlite3
-                        conn = sqlite3.connect('my_terminal.db')
-                        c = conn.cursor()
-                        try:
-                            c.execute("${query}")
+                    try {
+                        const pythonSqlCode = `
+                            import sqlite3
+                            conn = sqlite3.connect('my_terminal.db')
+                            c = conn.cursor()
+                            c.execute("""${query}""")
                             conn.commit()
                             results = c.fetchall()
                             if results:
@@ -328,12 +328,12 @@
                                     print(row)
                             else:
                                 print("Query executed successfully.")
-                        except sqlite3.OperationalError as e:
-                            print(f"SQL Error: {e}")
-                        finally:
                             conn.close()
-                    `;
-                    await pyodide.runPythonAsync(pythonSqlCode);
+                        `;
+                        await pyodide.runPythonAsync(pythonSqlCode);
+                    } catch (e) {
+                        print(`<span style="color: red;">SQL Error: ${e}</span>`);
+                    }
                     break;
 
                 default:
