@@ -77,11 +77,21 @@
         <input type="text" id="command-line" autofocus>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
     <script>
         // JavaScript: サイトの動きを制御します
         const terminal = document.getElementById('terminal');
         const commandLine = document.getElementById('command-line');
         const startTime = Date.now();
+
+        // Pythonインタプリタの初期化
+        let pyodide;
+        async function initializePyodide() {
+            print("Loading Python environment... This might take a moment.");
+            pyodide = await loadPyodide();
+            print("Python environment loaded. Type 'help' to see available commands.");
+        }
+        initializePyodide();
 
         // メッセージを画面に表示する関数
         function print(message) {
@@ -102,7 +112,7 @@
                 }
 
                 // コマンドに応じた処理を実行
-                handleCommand(command.toLowerCase()); // コマンドは小文字で処理
+                handleCommand(command);
 
                 // 入力欄をクリア
                 commandLine.value = '';
@@ -113,9 +123,9 @@
         function handleCommand(command) {
             // コマンドと引数を分割する
             const parts = command.split(' ');
-            const mainCommand = parts[0];
+            const mainCommand = parts[0].toLowerCase();
             const args = parts.slice(1);
-            const fullCommand = command; // 元のコマンド全体を保持
+            const fullCommand = command;
 
             switch (mainCommand) {
                 case 'help':
@@ -132,6 +142,7 @@
                     print("&nbsp;&nbsp;<b>echo</b> [text] - Repeats the given text.");
                     print("&nbsp;&nbsp;<b>fortune</b>  - Displays a random quote or joke.");
                     print("&nbsp;&nbsp;<b>js</b> [code]    - Executes JavaScript code. (e.g., 'js 2 * 10')");
+                    print("&nbsp;&nbsp;<b>python</b> [code]- Executes Python code. (e.g., 'python print(2 * 10)')");
                     print("<br>");
                     print("<b>Dangerous Commands (Simulated):</b>");
                     print("&nbsp;&nbsp;<b>rm -rf /</b>   - <b>(DANGER)</b> Simulates a system wipe.");
@@ -223,6 +234,20 @@
                         }
                     } else {
                         print("Usage: js [your JavaScript code]");
+                    }
+                    break;
+
+                case 'python':
+                    const pythonCode = args.join(' ');
+                    if (pyodide) {
+                        try {
+                            const result = pyodide.runPython(pythonCode);
+                            print(result);
+                        } catch (e) {
+                            print(`<span style="color: red;">Python Error: ${e}</span>`);
+                        }
+                    } else {
+                        print("Python environment is still loading. Please wait...");
                     }
                     break;
                 
