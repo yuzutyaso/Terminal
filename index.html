@@ -91,17 +91,16 @@
         const terminal = document.getElementById('terminal');
         const commandLine = document.getElementById('command-line');
         const startTime = Date.now();
-        const correctPassword = '000728'; // 定義されたパスワード
+        const correctPassword = '000728';
 
         let pyodide;
-        let myIpAddress = '127.0.0.1';
-        let isAuthenticated = false; // 認証状態を管理するフラグ
+        let myId = '';
+        let isAuthenticated = false;
 
-        // 擬似WebSocketサーバーからのメッセージ
         const simulatedMessages = [
-            { sender: '192.168.1.5', content: 'Hello!', type: 'received' },
-            { sender: '192.168.1.5', content: 'How are you doing?', type: 'received' },
-            { sender: '192.168.1.5', content: 'This is a secure connection.', type: 'received' }
+            { sender: 'ABCDEF', content: 'Hello!', type: 'received' },
+            { sender: 'ABCDEF', content: 'How are you doing?', type: 'received' },
+            { sender: 'GHIJKL', content: 'This is a secure connection.', type: 'received' }
         ];
 
         async function initializePyodide() {
@@ -117,6 +116,39 @@
             print("Initializing database...");
             await initializeDB();
             print("Database ready.");
+
+            loadMyId();
+        }
+
+        function loadMyId() {
+            const idCookie = getCookie('myTerminalId');
+            if (idCookie) {
+                myId = idCookie;
+                print(`Your saved ID is: ${myId}`);
+            } else {
+                print("Type '/id' to generate a new ID.");
+            }
+        }
+
+        function getCookie(name) {
+            const nameEQ = name + "=";
+            const ca = document.cookie.split(';');
+            for(let i=0; i < ca.length; i++) {
+                let c = ca[i];
+                while (c.charAt(0)==' ') c = c.substring(1,c.length);
+                if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length,c.length);
+            }
+            return null;
+        }
+
+        function setCookie(name, value, days) {
+            let expires = "";
+            if (days) {
+                const date = new Date();
+                date.setTime(date.getTime() + (days*24*60*60*1000));
+                expires = "; expires=" + date.toUTCString();
+            }
+            document.cookie = name + "=" + (value || "")  + expires + "; path=/";
         }
 
         async function initializeDB() {
@@ -150,7 +182,7 @@
             setInterval(() => {
                 if (isAuthenticated && messageIndex < simulatedMessages.length) {
                     const msg = simulatedMessages[messageIndex];
-                    const promptText = msg.sender === myIpAddress ? `$ ` : `${msg.sender}: `;
+                    const promptText = msg.sender === myId ? `$ ` : `${msg.sender}: `;
                     const contentClass = msg.type === 'received' ? 'received' : 'sent';
                     print(`<div><span class="prompt">${promptText}</span><span class="${contentClass}">${msg.content}</span></div>`);
                     messageIndex++;
@@ -178,32 +210,30 @@
             const args = parts.slice(1);
             const fullCommand = command;
 
-            // パスワード認証の処理
             if (!isAuthenticated && mainCommand !== 'auth') {
                 print("Please authenticate with the correct password first. Use 'auth [password]'.");
                 return;
             }
 
-            // IPアドレスで始まる通信コマンドの処理
             if (mainCommand.startsWith('/')) {
-                const target = mainCommand.substring(1);
+                const targetId = mainCommand.substring(1);
                 const message = args.join(' ');
                 
-                if (target === 'ip') {
-                    print("Fetching your IP address...");
-                    try {
-                        const response = await fetch('https://api.ipify.org?format=json');
-                        const data = await response.json();
-                        myIpAddress = data.ip;
-                        print(`Your IP address is: ${myIpAddress}`);
-                    } catch (e) {
-                        print(`<span style="color: red;">Error fetching IP: Could not connect to the service.</span>`);
+                if (targetId === 'id') {
+                    if (myId) {
+                        print(`Your ID is already set: ${myId}`);
+                    } else {
+                        const newId = Math.random().toString(36).substring(2, 8).toUpperCase();
+                        myId = newId;
+                        setCookie('myTerminalId', myId, 365); // 1年間有効
+                        print(`Your new ID is: ${myId}`);
+                        print("This ID has been saved to your browser's cookie.");
                     }
                 } else {
                     if (message) {
-                        const sender = 'Me';
+                        const sender = myId;
                         const content = message;
-                        print(`<div><span class="prompt">$ ${target}: </span><span class="sent">${content}</span></div>`);
+                        print(`<div><span class="prompt">$ ${targetId}: </span><span class="sent">${content}</span></div>`);
                         
                         const pythonCode = `
                             import sqlite3, datetime
@@ -216,7 +246,7 @@
                         await pyodide.runPythonAsync(pythonCode);
                         print("Message sent and saved to DB.");
                     } else {
-                        print("Usage: /[target_ip] [message]");
+                        print("Usage: /[target_id] [message]");
                     }
                 }
                 return;
@@ -242,8 +272,8 @@
                     print("&nbsp;&nbsp;<b>ls</b>       - Lists files in the current directory.");
                     print("&nbsp;&nbsp;<b>upload</b>   - Uploads a file to the virtual filesystem.");
                     print("&nbsp;&nbsp;<b>pip -r</b> [file] - Installs packages from a requirements file.");
-                    print("&nbsp;&nbsp;<b>/ip</b>      - Shows your IP address. (Simulated)");
-                    print("&nbsp;&nbsp;<b>/[ip]</b> [message] - Sends a message to another IP. (Simulated)");
+                    print("&nbsp;&nbsp;<b>/id</b>      - Generates or shows your unique terminal ID.");
+                    print("&nbsp;&nbsp;<b>/[id]</b> [message] - Sends a message to another terminal ID. (Simulated)");
                     print("&nbsp;&nbsp;<b>cat</b> [file] - Displays the content of a file.");
                     print("&nbsp;&nbsp;<b>sql</b> [query] - Executes a SQL query on the internal database.");
                     print("<br>");
