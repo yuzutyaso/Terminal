@@ -91,14 +91,17 @@
         const terminal = document.getElementById('terminal');
         const commandLine = document.getElementById('command-line');
         const startTime = Date.now();
+        const correctPassword = '000728'; // 定義されたパスワード
 
         let pyodide;
-        let myIpAddress = '127.0.0.1'; // 初期値としてローカルホストを設定
-        
+        let myIpAddress = '127.0.0.1';
+        let isAuthenticated = false; // 認証状態を管理するフラグ
+
         // 擬似WebSocketサーバーからのメッセージ
         const simulatedMessages = [
             { sender: '192.168.1.5', content: 'Hello!', type: 'received' },
-            { sender: '192.168.1.5', content: 'How are you doing?', type: 'received' }
+            { sender: '192.168.1.5', content: 'How are you doing?', type: 'received' },
+            { sender: '192.168.1.5', content: 'This is a secure connection.', type: 'received' }
         ];
 
         async function initializePyodide() {
@@ -114,8 +117,6 @@
             print("Initializing database...");
             await initializeDB();
             print("Database ready.");
-
-            simulateRealtimeMessages();
         }
 
         async function initializeDB() {
@@ -147,14 +148,14 @@
         function simulateRealtimeMessages() {
             let messageIndex = 0;
             setInterval(() => {
-                if (messageIndex < simulatedMessages.length) {
+                if (isAuthenticated && messageIndex < simulatedMessages.length) {
                     const msg = simulatedMessages[messageIndex];
                     const promptText = msg.sender === myIpAddress ? `$ ` : `${msg.sender}: `;
                     const contentClass = msg.type === 'received' ? 'received' : 'sent';
                     print(`<div><span class="prompt">${promptText}</span><span class="${contentClass}">${msg.content}</span></div>`);
                     messageIndex++;
                 }
-            }, 5000); // 5秒ごとに新しいメッセージを表示
+            }, 5000);
         }
 
         commandLine.addEventListener('keydown', async function(event) {
@@ -177,6 +178,12 @@
             const args = parts.slice(1);
             const fullCommand = command;
 
+            // パスワード認証の処理
+            if (!isAuthenticated && mainCommand !== 'auth') {
+                print("Please authenticate with the correct password first. Use 'auth [password]'.");
+                return;
+            }
+
             // IPアドレスで始まる通信コマンドの処理
             if (mainCommand.startsWith('/')) {
                 const target = mainCommand.substring(1);
@@ -187,7 +194,7 @@
                     try {
                         const response = await fetch('https://api.ipify.org?format=json');
                         const data = await response.json();
-                        myIpAddress = data.ip; // 取得したIPを保存
+                        myIpAddress = data.ip;
                         print(`Your IP address is: ${myIpAddress}`);
                     } catch (e) {
                         print(`<span style="color: red;">Error fetching IP: Could not connect to the service.</span>`);
@@ -216,8 +223,20 @@
             }
 
             switch (mainCommand) {
+                case 'auth':
+                    if (args[0] === correctPassword) {
+                        isAuthenticated = true;
+                        print("Authentication successful. You are now connected.");
+                        simulateRealtimeMessages();
+                    } else {
+                        isAuthenticated = false;
+                        print("<span style='color: red;'>Authentication failed. Incorrect password.</span>");
+                    }
+                    break;
+                
                 case 'help':
                     print("Available commands:");
+                    print("&nbsp;&nbsp;<b>auth</b> [password] - Authenticate to start a secure session.");
                     print("&nbsp;&nbsp;<b>about</b>    - Shows information about this site.");
                     print("&nbsp;&nbsp;<b>clear</b>    - Clears the terminal screen.");
                     print("&nbsp;&nbsp;<b>ls</b>       - Lists files in the current directory.");
