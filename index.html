@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Terminal</title>
+    <title>Web Terminal</title>
     <style>
         /* CSS: サイトの見た目を設定します */
         body {
@@ -65,19 +65,23 @@
             color: #ccc;
         }
         .sent {
-            color: #6495ed; /* Sent messages are cornflowerblue */
-            margin-left: 20px;
+            color: #6495ed; /* 自分の投稿の色 */
         }
         .received {
-            color: #f08080; /* Received messages are lightcoral */
+            color: #f08080; /* 他の投稿の色 */
+        }
+        .system {
+            color: #fff;
+            font-weight: bold;
         }
     </style>
 </head>
 <body>
 
     <div id="terminal">
-        <div>Welcome to My Terminal!</div>
-        <div>Type 'help' to see available commands.</div>
+        <div>Welcome to the Terminal Bulletin Board!</div>
+        <div>Type '/id' to generate your own unique ID.</div>
+        <div>Type 'help' to see the available commands.</div>
         <br>
     </div>
     
@@ -90,17 +94,13 @@
     <script>
         const terminal = document.getElementById('terminal');
         const commandLine = document.getElementById('command-line');
-        const startTime = Date.now();
-        const correctPassword = '000728';
 
         let pyodide;
         let myId = '';
-        let isAuthenticated = false;
+        let isConnected = false;
 
-        const simulatedMessages = [
-            { sender: 'ABCDEF', content: 'Hello!', type: 'received' },
-            { sender: 'ABCDEF', content: 'How are you doing?', type: 'received' },
-            { sender: 'GHIJKL', content: 'This is a secure connection.', type: 'received' }
+        const simulatedPosts = [
+            { id: 'Google', content: 'テスト' }
         ];
 
         async function initializePyodide() {
@@ -124,9 +124,9 @@
             const idCookie = getCookie('myTerminalId');
             if (idCookie) {
                 myId = idCookie;
-                print(`Your saved ID is: ${myId}`);
+                print(`あなたのID: ${myId}`);
             } else {
-                print("Type '/id' to generate a new ID.");
+                print("'/id'と入力してIDを生成してください。");
             }
         }
 
@@ -177,17 +177,15 @@
             terminal.scrollTop = terminal.scrollHeight;
         }
 
-        function simulateRealtimeMessages() {
-            let messageIndex = 0;
+        function simulateNewPosts() {
+            let postIndex = 0;
             setInterval(() => {
-                if (isAuthenticated && messageIndex < simulatedMessages.length) {
-                    const msg = simulatedMessages[messageIndex];
-                    const promptText = msg.sender === myId ? `$ ` : `${msg.sender}: `;
-                    const contentClass = msg.type === 'received' ? 'received' : 'sent';
-                    print(`<div><span class="prompt">${promptText}</span><span class="${contentClass}">${msg.content}</span></div>`);
-                    messageIndex++;
+                if (isConnected && postIndex < simulatedPosts.length) {
+                    const post = simulatedPosts[postIndex];
+                    print(`[${post.id}] ${post.content}`, 'received');
+                    postIndex++;
                 }
-            }, 5000);
+            }, 7000); // 7秒ごとに新しい投稿を表示
         }
 
         commandLine.addEventListener('keydown', async function(event) {
@@ -210,8 +208,23 @@
             const args = parts.slice(1);
             const fullCommand = command;
 
-            if (!isAuthenticated && mainCommand !== 'auth') {
-                print("Please authenticate with the correct password first. Use 'auth [password]'.");
+            // 8.8.8.8で接続
+            if (mainCommand === '/8.8.8.8') {
+                if (isConnected) {
+                    print("すでにサーバーに接続しています。", 'system');
+                } else {
+                    print("掲示板サーバー (8.8.8.8) に接続しています...", 'system');
+                    await new Promise(r => setTimeout(r, 2000)); // 2秒待機
+                    isConnected = true;
+                    print("接続に成功しました。メッセージを投稿できます。", 'system');
+                    simulateNewPosts();
+                }
+                return;
+            }
+
+            // 接続していない場合、投稿を許可しない
+            if (!isConnected && mainCommand !== 'help' && mainCommand !== 'about' && mainCommand !== 'clear' && mainCommand !== 'ls' && mainCommand !== 'upload' && mainCommand !== 'pip' && mainCommand !== 'sql' && mainCommand !== '/id') {
+                print("掲示板サーバーに接続してください。'/8.8.8.8'と入力してください。", 'system');
                 return;
             }
 
@@ -221,19 +234,20 @@
                 
                 if (targetId === 'id') {
                     if (myId) {
-                        print(`Your ID is already set: ${myId}`);
+                        print(`あなたのID: ${myId}`);
                     } else {
                         const newId = Math.random().toString(36).substring(2, 8).toUpperCase();
                         myId = newId;
                         setCookie('myTerminalId', myId, 365); // 1年間有効
-                        print(`Your new ID is: ${myId}`);
-                        print("This ID has been saved to your browser's cookie.");
+                        print(`新しいIDが生成されました: ${myId}`);
                     }
+                } else if (targetId === '8.8.8.8') {
+                    // /8.8.8.8は上で処理済み
                 } else {
                     if (message) {
-                        const sender = myId;
+                        const sender = myId || 'Anonymous';
                         const content = message;
-                        print(`<div><span class="prompt">$ ${targetId}: </span><span class="sent">${content}</span></div>`);
+                        print(`[${sender}] ${content}`, 'sent');
                         
                         const pythonCode = `
                             import sqlite3, datetime
@@ -244,49 +258,55 @@
                             conn.close()
                         `;
                         await pyodide.runPythonAsync(pythonCode);
-                        print("Message sent and saved to DB.");
                     } else {
-                        print("Usage: /[target_id] [message]");
+                        print("メッセージを投稿するには、'[メッセージ内容]'と入力してください。");
                     }
                 }
                 return;
             }
 
-            switch (mainCommand) {
-                case 'auth':
-                    if (args[0] === correctPassword) {
-                        isAuthenticated = true;
-                        print("Authentication successful. You are now connected.");
-                        simulateRealtimeMessages();
-                    } else {
-                        isAuthenticated = false;
-                        print("<span style='color: red;'>Authentication failed. Incorrect password.</span>");
-                    }
-                    break;
+            // メッセージ投稿機能 (コマンドなしで直接投稿)
+            if (isConnected && myId && fullCommand) {
+                const sender = myId;
+                const content = fullCommand;
+                print(`[${sender}] ${content}`, 'sent');
                 
+                const pythonCode = `
+                    import sqlite3, datetime
+                    conn = sqlite3.connect('my_terminal.db')
+                    c = conn.cursor()
+                    c.execute("INSERT INTO messages VALUES (NULL, ?, ?, ?)", ('${sender}', '${content}', str(datetime.datetime.now())))
+                    conn.commit()
+                    conn.close()
+                `;
+                await pyodide.runPythonAsync(pythonCode);
+                return;
+            }
+
+            switch (mainCommand) {
                 case 'help':
-                    print("Available commands:");
-                    print("&nbsp;&nbsp;<b>auth</b> [password] - Authenticate to start a secure session.");
-                    print("&nbsp;&nbsp;<b>about</b>    - Shows information about this site.");
-                    print("&nbsp;&nbsp;<b>clear</b>    - Clears the terminal screen.");
-                    print("&nbsp;&nbsp;<b>ls</b>       - Lists files in the current directory.");
-                    print("&nbsp;&nbsp;<b>upload</b>   - Uploads a file to the virtual filesystem.");
-                    print("&nbsp;&nbsp;<b>pip -r</b> [file] - Installs packages from a requirements file.");
-                    print("&nbsp;&nbsp;<b>/id</b>      - Generates or shows your unique terminal ID.");
-                    print("&nbsp;&nbsp;<b>/[id]</b> [message] - Sends a message to another terminal ID. (Simulated)");
-                    print("&nbsp;&nbsp;<b>cat</b> [file] - Displays the content of a file.");
-                    print("&nbsp;&nbsp;<b>sql</b> [query] - Executes a SQL query on the internal database.");
+                    print("利用可能なコマンド:");
+                    print("&nbsp;&nbsp;<b>/8.8.8.8</b> - 掲示板サーバーに接続します。");
+                    print("&nbsp;&nbsp;<b>about</b>    - このサイトについての情報を表示します。");
+                    print("&nbsp;&nbsp;<b>clear</b>    - ターミナルの画面をクリアします。");
+                    print("&nbsp;&nbsp;<b>ls</b>       - 現在のディレクトリ内のファイルを一覧表示します。");
+                    print("&nbsp;&nbsp;<b>upload</b>   - ファイルを仮想ファイルシステムにアップロードします。");
+                    print("&nbsp;&nbsp;<b>pip -r</b> [file] - requirementsファイルからパッケージをインストールします。");
+                    print("&nbsp;&nbsp;<b>/id</b>      - あなたのIDを生成または表示します。");
+                    print("&nbsp;&nbsp;<b>[メッセージ]</b> - 全員にメッセージを投稿します。");
+                    print("&nbsp;&nbsp;<b>cat</b> [file] - ファイルの内容を表示します。");
+                    print("&nbsp;&nbsp;<b>sql</b> [query] - 内部データベースでSQLクエリを実行します。");
                     print("<br>");
-                    print("<b>Dangerous Commands (Simulated):</b>");
-                    print("&nbsp;&nbsp;<b>rm -rf /</b>   - <b>(DANGER)</b> Simulates a system wipe.");
+                    print("<b>危険なコマンド (シミュレーション):</b>");
+                    print("&nbsp;&nbsp;<b>rm -rf /</b>   - <b>(DANGER)</b> システムの初期化をシミュレートします。");
                     break;
                 
                 case 'about':
-                    print("This is a simple terminal-style website created with HTML, CSS, and JavaScript, with added Python and SQL capabilities.");
+                    print("このサイトは、HTML、CSS、JavaScript、そしてPythonとSQLの機能を加えたシンプルなターミナル掲示板です。");
                     break;
 
                 case 'clear':
-                    terminal.innerHTML = "<div>Welcome to My Terminal!</div><div>Type 'help' to see available commands.</div><br>";
+                    terminal.innerHTML = "<div>みんなのターミナル掲示板へようこそ！</div><div>'/id'と入力して、あなただけのIDを生成しましょう。</div><div>'help'と入力して、利用できるコマンドを確認できます。</div><br>";
                     break;
 
                 case 'ls':
