@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web Terminal</title>
+    <title>Web　Terminal</title>
     <style>
-        /* CSS: サイトの見た目を設定します */
         body {
             background-color: #1a1a1a;
             color: #f0f0f0;
@@ -64,11 +63,12 @@
         .message {
             color: #ccc;
         }
-        .sent {
-            color: #6495ed; /* 自分の投稿の色 */
+        .my-message {
+            color: #6495ed;
+            margin-left: 20px;
         }
-        .received {
-            color: #f08080; /* 他の投稿の色 */
+        .other-message {
+            color: #f08080;
         }
         .system {
             color: #fff;
@@ -79,10 +79,7 @@
 <body>
 
     <div id="terminal">
-        <div>Welcome to the Terminal Bulletin Board!</div>
-        <div>Type '/id' to generate your own unique ID.</div>
-        <div>Type 'help' to see the available commands.</div>
-        <br>
+        <div>If you come to this site and don't understand anything, just send a message saying "help." Unless you're an idiot, you'll understand...</div>
     </div>
     
     <div class="input-area">
@@ -90,44 +87,65 @@
         <input type="text" id="command-line" autofocus>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
         const terminal = document.getElementById('terminal');
         const commandLine = document.getElementById('command-line');
+        
+        // --- ここをあなたのSupabaseプロジェクトの情報に置き換えてください ---
+        const SUPABASE_URL = 'https://zlbfsyixwncpictplcvk.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpsYmZzeWl4d25jcGljdHBsY3ZrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ4MDkwOTcsImV4cCI6MjA3MDM4NTA5N30.AGoC-NxJTJPKnyU1pb2ICONGYd4b5EzdW6nkcOyXdao';
+        // -----------------------------------------------------------
 
-        let pyodide;
         let myId = '';
-        let isConnected = false;
+        let supabase = null;
 
-        const simulatedPosts = [
-            { id: 'Google', content: 'テスト' }
-        ];
+        // Supabaseの初期化
+        async function initializeSupabase() {
+            try {
+                supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                print("Supabase接続中...", 'system');
 
-        async function initializePyodide() {
-            print("Loading Python environment... This might take a moment.");
-            pyodide = await loadPyodide();
-            print("Python environment loaded. Type 'help' to see available commands.");
-            
-            print("Installing 'sqlite3' and 'requests' modules...");
-            await pyodide.loadPackage("sqlite3");
-            await pyodide.loadPackage("requests");
-            print("Done. You can now use `import sqlite3` and `import requests` in python.");
-            
-            print("Initializing database...");
-            await initializeDB();
-            print("Database ready.");
+                // メッセージをリアルタイムで購読
+                supabase
+                    .channel('messages')
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => {
+                        const { new: newMessage } = payload;
+                        if (newMessage) {
+                            displayMessage(newMessage.sender_id, newMessage.content);
+                        }
+                    })
+                    .subscribe();
 
-            loadMyId();
+                // 既存のメッセージを取得して表示
+                const { data, error } = await supabase.from('messages').select('*').order('created_at', { ascending: true });
+                if (error) throw error;
+                
+                data.forEach(msg => {
+                    displayMessage(msg.sender_id, msg.content);
+                });
+
+                print("掲示板に接続しました。メッセージを投稿できます。", 'system');
+            } catch (error) {
+                print(`Supabaseへの接続に失敗しました: ${error.message}`, 'system');
+            }
         }
 
-        function loadMyId() {
-            const idCookie = getCookie('myTerminalId');
-            if (idCookie) {
-                myId = idCookie;
-                print(`あなたのID: ${myId}`);
-            } else {
-                print("'/id'と入力してIDを生成してください。");
-            }
+        function displayMessage(sender, content) {
+            const isMyMessage = sender === myId;
+            const className = isMyMessage ? 'my-message' : 'other-message';
+            const message = `[${sender}] ${content}`;
+            print(message, className);
+        }
+
+        // --- 以前のコードの関数をそのまま流用 ---
+        
+        function print(message, className = 'message') {
+            const newLine = document.createElement('div');
+            newLine.className = className;
+            newLine.innerHTML = message;
+            terminal.appendChild(newLine);
+            terminal.scrollTop = terminal.scrollHeight;
         }
 
         function getCookie(name) {
@@ -150,42 +168,15 @@
             }
             document.cookie = name + "=" + (value || "")  + expires + "; path=/";
         }
-
-        async function initializeDB() {
-            await pyodide.runPythonAsync(`
-                import sqlite3
-                conn = sqlite3.connect('my_terminal.db')
-                c = conn.cursor()
-                c.execute('''
-                    CREATE TABLE IF NOT EXISTS messages (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        sender TEXT,
-                        content TEXT,
-                        timestamp TEXT
-                    )
-                ''')
-                conn.commit()
-                conn.close()
-            `);
-        }
-
-        function print(message, className = 'message') {
-            const newLine = document.createElement('div');
-            newLine.className = className;
-            newLine.innerHTML = message;
-            terminal.appendChild(newLine);
-            terminal.scrollTop = terminal.scrollHeight;
-        }
-
-        function simulateNewPosts() {
-            let postIndex = 0;
-            setInterval(() => {
-                if (isConnected && postIndex < simulatedPosts.length) {
-                    const post = simulatedPosts[postIndex];
-                    print(`[${post.id}] ${post.content}`, 'received');
-                    postIndex++;
-                }
-            }, 7000); // 7秒ごとに新しい投稿を表示
+        
+        function loadMyId() {
+            const idCookie = getCookie('myTerminalId');
+            if (idCookie) {
+                myId = idCookie;
+                print(`あなたのID: ${myId}`);
+            } else {
+                print("'/id'と入力してIDを生成してください。");
+            }
         }
 
         commandLine.addEventListener('keydown', async function(event) {
@@ -205,34 +196,32 @@
         async function handleCommand(command) {
             const parts = command.split(' ');
             const mainCommand = parts[0].toLowerCase();
-            const args = parts.slice(1);
             const fullCommand = command;
 
-            // 8.8.8.8で接続
-            if (mainCommand === '/8.8.8.8') {
-                if (isConnected) {
-                    print("すでにサーバーに接続しています。", 'system');
+            // 掲示板への投稿
+            if (myId && fullCommand) {
+                if (supabase) {
+                    const { error } = await supabase
+                        .from('messages')
+                        .insert({ sender_id: myId, content: fullCommand });
+
+                    if (error) {
+                        print(`投稿に失敗しました: ${error.message}`, 'system');
+                    }
                 } else {
-                    print("掲示板サーバー (8.8.8.8) に接続しています...", 'system');
-                    await new Promise(r => setTimeout(r, 2000)); // 2秒待機
-                    isConnected = true;
-                    print("接続に成功しました。メッセージを投稿できます。", 'system');
-                    simulateNewPosts();
+                    print("Supabaseに接続されていません。", 'system');
                 }
                 return;
             }
 
-            // 接続していない場合、投稿を許可しない
-            if (!isConnected && mainCommand !== 'help' && mainCommand !== 'about' && mainCommand !== 'clear' && mainCommand !== 'ls' && mainCommand !== 'upload' && mainCommand !== 'pip' && mainCommand !== 'sql' && mainCommand !== '/id') {
-                print("掲示板サーバーに接続してください。'/8.8.8.8'と入力してください。", 'system');
-                return;
-            }
-
-            if (mainCommand.startsWith('/')) {
-                const targetId = mainCommand.substring(1);
-                const message = args.join(' ');
+            switch (mainCommand) {
+                case 'help':
+                    print("利用可能なコマンド:");
+                    print("&nbsp;&nbsp;<b>/id</b>      - あなたのIDを生成または表示します。");
+                    print("&nbsp;&nbsp;<b>[メッセージ]</b> - 全員にメッセージを投稿します。");
+                    break;
                 
-                if (targetId === 'id') {
+                case '/id':
                     if (myId) {
                         print(`あなたのID: ${myId}`);
                     } else {
@@ -241,173 +230,11 @@
                         setCookie('myTerminalId', myId, 365); // 1年間有効
                         print(`新しいIDが生成されました: ${myId}`);
                     }
-                } else if (targetId === '8.8.8.8') {
-                    // /8.8.8.8は上で処理済み
-                } else {
-                    if (message) {
-                        const sender = myId || 'Anonymous';
-                        const content = message;
-                        print(`[${sender}] ${content}`, 'sent');
-                        
-                        const pythonCode = `
-                            import sqlite3, datetime
-                            conn = sqlite3.connect('my_terminal.db')
-                            c = conn.cursor()
-                            c.execute("INSERT INTO messages VALUES (NULL, ?, ?, ?)", ('${sender}', '${content}', str(datetime.datetime.now())))
-                            conn.commit()
-                            conn.close()
-                        `;
-                        await pyodide.runPythonAsync(pythonCode);
-                    } else {
-                        print("メッセージを投稿するには、'[メッセージ内容]'と入力してください。");
-                    }
-                }
-                return;
-            }
-
-            // メッセージ投稿機能 (コマンドなしで直接投稿)
-            if (isConnected && myId && fullCommand) {
-                const sender = myId;
-                const content = fullCommand;
-                print(`[${sender}] ${content}`, 'sent');
-                
-                const pythonCode = `
-                    import sqlite3, datetime
-                    conn = sqlite3.connect('my_terminal.db')
-                    c = conn.cursor()
-                    c.execute("INSERT INTO messages VALUES (NULL, ?, ?, ?)", ('${sender}', '${content}', str(datetime.datetime.now())))
-                    conn.commit()
-                    conn.close()
-                `;
-                await pyodide.runPythonAsync(pythonCode);
-                return;
-            }
-
-            switch (mainCommand) {
-                case 'help':
-                    print("利用可能なコマンド:");
-                    print("&nbsp;&nbsp;<b>/8.8.8.8</b> - 掲示板サーバーに接続します。");
-                    print("&nbsp;&nbsp;<b>about</b>    - このサイトについての情報を表示します。");
-                    print("&nbsp;&nbsp;<b>clear</b>    - ターミナルの画面をクリアします。");
-                    print("&nbsp;&nbsp;<b>ls</b>       - 現在のディレクトリ内のファイルを一覧表示します。");
-                    print("&nbsp;&nbsp;<b>upload</b>   - ファイルを仮想ファイルシステムにアップロードします。");
-                    print("&nbsp;&nbsp;<b>pip -r</b> [file] - requirementsファイルからパッケージをインストールします。");
-                    print("&nbsp;&nbsp;<b>/id</b>      - あなたのIDを生成または表示します。");
-                    print("&nbsp;&nbsp;<b>[メッセージ]</b> - 全員にメッセージを投稿します。");
-                    print("&nbsp;&nbsp;<b>cat</b> [file] - ファイルの内容を表示します。");
-                    print("&nbsp;&nbsp;<b>sql</b> [query] - 内部データベースでSQLクエリを実行します。");
-                    print("<br>");
-                    print("<b>危険なコマンド (シミュレーション):</b>");
-                    print("&nbsp;&nbsp;<b>rm -rf /</b>   - <b>(DANGER)</b> システムの初期化をシミュレートします。");
-                    break;
-                
-                case 'about':
-                    print("このサイトは、HTML、CSS、JavaScript、そしてPythonとSQLの機能を加えたシンプルなターミナル掲示板です。");
-                    break;
-
-                case 'clear':
-                    terminal.innerHTML = "<div>みんなのターミナル掲示板へようこそ！</div><div>'/id'と入力して、あなただけのIDを生成しましょう。</div><div>'help'と入力して、利用できるコマンドを確認できます。</div><br>";
-                    break;
-
-                case 'ls':
-                    print("README.md&nbsp;&nbsp;&nbsp;&nbsp;my_terminal.db&nbsp;&nbsp;&nbsp;&nbsp;index.html");
-                    break;
-
-                case 'upload':
-                    const fileInput = document.createElement('input');
-                    fileInput.type = 'file';
-                    fileInput.accept = '.txt';
-                    fileInput.onchange = async (event) => {
-                        const file = event.target.files[0];
-                        if (file) {
-                            print(`Uploading file: ${file.name}...`);
-                            const fileContent = await file.text();
-                            
-                            try {
-                                pyodide.FS.writeFile(file.name, fileContent, { encoding: "utf8" });
-                                print(`File '${file.name}' uploaded successfully.`);
-                            } catch (e) {
-                                print(`<span style="color: red;">Error uploading file: ${e}</span>`);
-                            }
-                        }
-                    };
-                    fileInput.click();
-                    break;
-
-                case 'pip':
-                    const pipArgs = args.join(' ');
-                    if (pyodide) {
-                        if (pipArgs.startsWith('-r')) {
-                            const filename = pipArgs.split(' ')[1];
-                            if (filename) {
-                                print(`Installing packages from '${filename}'...`);
-                                try {
-                                    const requirements = pyodide.FS.readFile(filename, { encoding: "utf8" });
-                                    const packages = requirements.split('\n').map(line => line.trim()).filter(line => line.length > 0 && !line.startsWith('#'));
-                                    
-                                    for (const pkg of packages) {
-                                        print(`Installing: ${pkg}...`);
-                                        await pyodide.loadPackage(pkg);
-                                    }
-                                    print(`Successfully installed all packages from '${filename}'.`);
-                                } catch (e) {
-                                    print(`<span style="color: red;">Error: Failed to read file or install packages. Make sure the file exists and the package names are correct.</span>`);
-                                    console.error(e);
-                                }
-                            } else {
-                                print("Usage: pip -r [filename]");
-                            }
-                        } else {
-                            print("Usage: pip -r [filename]");
-                        }
-                    } else {
-                        print("Python environment is still loading. Please wait...");
-                    }
-                    break;
-                
-                case 'rm':
-                    if (args.join(' ') === '-rf /') {
-                        print("<span style='color: red;'>Warning: This is a highly dangerous command!</span>");
-                        print("Simulating system wipe...");
-                        print("All files deleted. The system is now empty.");
-                        print("<br>");
-                        print("...Just kidding! Your terminal is safe.");
-                    } else {
-                        print("rm: cannot remove file: Is a directory (simulated)");
-                    }
-                    break;
-                
-                case 'sql':
-                    const query = args.join(' ');
-                    if (!query) {
-                        print("Usage: sql [query]");
-                        return;
-                    }
-                    try {
-                        const pythonSqlCode = `
-                            import sqlite3
-                            conn = sqlite3.connect('my_terminal.db')
-                            c = conn.cursor()
-                            c.execute("""${query}""")
-                            conn.commit()
-                            results = c.fetchall()
-                            if results:
-                                print("Query results:")
-                                for row in results:
-                                    print(row)
-                            else:
-                                print("Query executed successfully.")
-                            conn.close()
-                        `;
-                        await pyodide.runPythonAsync(pythonSqlCode);
-                    } catch (e) {
-                        print(`<span style="color: red;">SQL Error: ${e}</span>`);
-                    }
                     break;
 
                 default:
                     if(fullCommand) {
-                        print(`Command not found: ${fullCommand}. Type 'help' for a list of commands.`);
+                        print(`コマンドが見つかりません: ${fullCommand}. 'help'で利用可能なコマンドを確認してください。`);
                     }
                     break;
             }
@@ -417,7 +244,8 @@
             commandLine.focus();
         });
 
-        initializePyodide();
+        loadMyId();
+        initializeSupabase();
     </script>
 </body>
 </html>
