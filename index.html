@@ -129,7 +129,6 @@
                 
                 print("掲示板に接続中...", 'system');
 
-                // リアルタイム購読を再有効化
                 supabaseClient
                     .channel('messages_channel')
                     .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => {
@@ -148,9 +147,21 @@
                 });
 
                 isConnected = true;
+                setCookie('isConnected', 'true', 365); // 接続状態をCookieに保存
                 print("掲示板に接続しました。メッセージを投稿できます。", 'system');
             } catch (error) {
                 print(`掲示板への接続に失敗しました: ${error.message}`, 'system');
+            }
+        }
+
+        function disconnectFromBoard() {
+            if (isConnected) {
+                supabaseClient.removeAllChannels();
+                isConnected = false;
+                setCookie('isConnected', 'false', 365); // 接続状態をCookieに保存
+                print("掲示板から切断しました。", 'system');
+            } else {
+                print("すでに切断されています。", 'system');
             }
         }
 
@@ -207,6 +218,13 @@
                 print(`あなたの名前: ${myName}`);
             } else {
                 myName = '';
+            }
+        }
+
+        function checkConnectionStatus() {
+            const status = getCookie('isConnected');
+            if (status === 'true') {
+                connectToBoard();
             }
         }
 
@@ -285,13 +303,7 @@
                     break;
 
                 case '/disconnect':
-                    if (isConnected) {
-                        supabaseClient.removeAllChannels();
-                        isConnected = false;
-                        print("掲示板から切断しました。", 'system');
-                    } else {
-                        print("すでに切断されています。", 'system');
-                    }
+                    disconnectFromBoard();
                     break;
                 
                 case '/clear':
@@ -320,6 +332,7 @@
 
         loadUserInfo();
         initializeSupabase();
+        checkConnectionStatus(); // ページ読み込み時に接続状態をチェック
     </script>
 </body>
 </html>
