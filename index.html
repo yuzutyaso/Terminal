@@ -130,6 +130,7 @@
                 }
                 
                 print("掲示板に接続中...", 'system');
+                setCookie('isConnected', 'true', 365); // 接続状態をCookieに保存
 
                 await fetchAllMessages();
 
@@ -241,6 +242,7 @@
         function loadUserInfo() {
             const idCookie = getCookie('myTerminalId');
             const nameCookie = getCookie('myTerminalName');
+            const isConnectedCookie = getCookie('isConnected');
             
             if (idCookie) {
                 myId = idCookie;
@@ -256,6 +258,10 @@
                 print(`あなたの名前: ${myName}`);
             } else {
                 myName = '';
+            }
+            
+            if (isConnectedCookie === 'true') {
+                connectToBoard();
             }
         }
 
@@ -330,6 +336,7 @@
                 case '/disconnect':
                     if (isConnected) {
                         isConnected = false;
+                        setCookie('isConnected', 'false', 365); // 接続状態をCookieに保存
                         print("掲示板から切断しました。", 'system');
                         stopUpdating();
                     } else {
