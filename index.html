@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Terminal</title>
+    <title>Web Terminal</title>
     <style>
         /* CSS: サイトの見た目を設定します */
         body {
@@ -67,7 +67,7 @@
 <body>
 
     <div id="terminal">
-        <div>Welcome to My Terminal!</div>
+        <div>Welcome to Web Terminal!</div>
         <div>Type 'help' to see available commands.</div>
         <br>
     </div>
@@ -115,6 +115,7 @@
             const parts = command.split(' ');
             const mainCommand = parts[0];
             const args = parts.slice(1);
+            const fullCommand = command; // 元のコマンド全体を保持
 
             switch (mainCommand) {
                 case 'help':
@@ -130,6 +131,7 @@
                     print("&nbsp;&nbsp;<b>uptime</b>   - Shows how long the system has been running.");
                     print("&nbsp;&nbsp;<b>echo</b> [text] - Repeats the given text.");
                     print("&nbsp;&nbsp;<b>fortune</b>  - Displays a random quote or joke.");
+                    print("&nbsp;&nbsp;<b>js</b> [code]    - Executes JavaScript code. (e.g., 'js 2 * 10')");
                     print("<br>");
                     print("<b>Dangerous Commands (Simulated):</b>");
                     print("&nbsp;&nbsp;<b>rm -rf /</b>   - <b>(DANGER)</b> Simulates a system wipe.");
@@ -209,8 +211,21 @@
                     const randomIndex = Math.floor(Math.random() * fortunes.length);
                     print(fortunes[randomIndex]);
                     break;
+
+                case 'js':
+                    const jsCode = args.join(' ');
+                    if (jsCode) {
+                        try {
+                            const result = eval(jsCode);
+                            print(result);
+                        } catch (e) {
+                            print(`<span style="color: red;">Error: ${e.message}</span>`);
+                        }
+                    } else {
+                        print("Usage: js [your JavaScript code]");
+                    }
+                    break;
                 
-                // --- ここから追加した危険なコマンド ---
                 case 'rm':
                     if (args.join(' ') === '-rf /') {
                         print("<span style='color: red;'>Warning: This is a highly dangerous command!</span>");
@@ -250,8 +265,8 @@
                     break;
 
                 default:
-                    if(command) {
-                        print(`Command not found: ${command}. Type 'help' for a list of commands.`);
+                    if(fullCommand) {
+                        print(`Command not found: ${fullCommand}. Type 'help' for a list of commands.`);
                     }
                     break;
             }
