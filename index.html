@@ -64,11 +64,11 @@
             color: #ccc;
         }
         .my-message {
-            color: #6495ed;
+            color: #6495ed; /* 自分の投稿の色 */
             margin-left: 20px;
         }
         .other-message {
-            color: #f08080;
+            color: #f08080; /* 他の投稿の色 */
         }
         .system {
             color: #fff;
@@ -80,6 +80,7 @@
 
     <div id="terminal">
         <div>If you come to this site and don't understand anything, just send a message saying "help." Unless you're an idiot, you'll understand...</div>
+        <br>
     </div>
     
     <div class="input-area">
@@ -93,22 +94,25 @@
         const commandLine = document.getElementById('command-line');
         
         // --- ここをあなたのSupabaseプロジェクトの情報に置き換えてください ---
-        const SUPABASE_URL = 'https://zlbfsyixwncpictplcvk.supabase.co';
+        const SUPABASE_URL = 'https://zlbfsyixwncpictplcvk.supabase.co'; 
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpsYmZzeWl4d25jcGljdHBsY3ZrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ4MDkwOTcsImV4cCI6MjA3MDM4NTA5N30.AGoC-NxJTJPKnyU1pb2ICONGYd4b5EzdW6nkcOyXdao';
         // -----------------------------------------------------------
 
         let myId = '';
-        let supabase = null;
+        let supabaseClient = null;
 
         // Supabaseの初期化
         async function initializeSupabase() {
             try {
-                supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                // Supabaseクライアントの初期化
+                const { createClient } = supabase;
+                supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
                 print("Supabase接続中...", 'system');
 
                 // メッセージをリアルタイムで購読
-                supabase
-                    .channel('messages')
+                supabaseClient
+                    .channel('messages_channel')
                     .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => {
                         const { new: newMessage } = payload;
                         if (newMessage) {
@@ -118,7 +122,7 @@
                     .subscribe();
 
                 // 既存のメッセージを取得して表示
-                const { data, error } = await supabase.from('messages').select('*').order('created_at', { ascending: true });
+                const { data, error } = await supabaseClient.from('messages').select('*').order('created_at', { ascending: true });
                 if (error) throw error;
                 
                 data.forEach(msg => {
@@ -137,8 +141,6 @@
             const message = `[${sender}] ${content}`;
             print(message, className);
         }
-
-        // --- 以前のコードの関数をそのまま流用 ---
         
         function print(message, className = 'message') {
             const newLine = document.createElement('div');
@@ -199,17 +201,13 @@
             const fullCommand = command;
 
             // 掲示板への投稿
-            if (myId && fullCommand) {
-                if (supabase) {
-                    const { error } = await supabase
-                        .from('messages')
-                        .insert({ sender_id: myId, content: fullCommand });
+            if (myId && fullCommand && mainCommand !== '/id' && mainCommand !== 'help' && supabaseClient) {
+                const { error } = await supabaseClient
+                    .from('messages')
+                    .insert({ sender_id: myId, content: fullCommand });
 
-                    if (error) {
-                        print(`投稿に失敗しました: ${error.message}`, 'system');
-                    }
-                } else {
-                    print("Supabaseに接続されていません。", 'system');
+                if (error) {
+                    print(`投稿に失敗しました: ${error.message}`, 'system');
                 }
                 return;
             }
