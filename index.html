@@ -80,7 +80,7 @@
 
     <div id="terminal">
         <div>ようこそ！</div>
-        <div>'/id'と入力してIDを生成、'/connect'で掲示板に接続できます。</div>
+        <div>'/connect'で掲示板に接続できます。</div>
         <div>'help'でコマンドを確認できます。</div>
         <br>
     </div>
@@ -104,6 +104,8 @@
         let myName = '';
         let supabaseClient = null;
         let isConnected = false;
+        let updateInterval = null;
+        let lastMessageId = 0;
 
         async function initializeSupabase() {
             try {
@@ -129,39 +131,64 @@
                 
                 print("掲示板に接続中...", 'system');
 
-                supabaseClient
-                    .channel('messages_channel')
-                    .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => {
-                        const { new: newMessage } = payload;
-                        if (newMessage) {
-                            displayMessage(newMessage.sender_id, newMessage.content);
-                        }
-                    })
-                    .subscribe();
-
-                const { data, error } = await supabaseClient.from('messages').select('*').order('created_at', { ascending: true });
-                if (error) throw error;
-                
-                data.forEach(msg => {
-                    displayMessage(msg.sender_id, msg.content);
-                });
+                await fetchAllMessages();
 
                 isConnected = true;
-                setCookie('isConnected', 'true', 365); // 接続状態をCookieに保存
                 print("掲示板に接続しました。メッセージを投稿できます。", 'system');
+                startUpdating();
             } catch (error) {
                 print(`掲示板への接続に失敗しました: ${error.message}`, 'system');
             }
         }
 
-        function disconnectFromBoard() {
-            if (isConnected) {
-                supabaseClient.removeAllChannels();
-                isConnected = false;
-                setCookie('isConnected', 'false', 365); // 接続状態をCookieに保存
-                print("掲示板から切断しました。", 'system');
-            } else {
-                print("すでに切断されています。", 'system');
+        async function fetchAllMessages() {
+            const { data, error } = await supabaseClient.from('messages').select('*').order('created_at', { ascending: true });
+            
+            if (error) {
+                throw error;
+            }
+
+            if (data.length > 0) {
+                data.forEach(msg => {
+                    displayMessage(msg.sender_id, msg.content);
+                });
+                lastMessageId = data[data.length - 1].id;
+            }
+        }
+        
+        async function fetchNewMessages() {
+            if (!isConnected) return;
+
+            const { data, error } = await supabaseClient
+                .from('messages')
+                .select('*')
+                .gt('id', lastMessageId)
+                .order('created_at', { ascending: true });
+            
+            if (error) {
+                console.error('メッセージの取得に失敗:', error);
+                return;
+            }
+
+            if (data.length > 0) {
+                data.forEach(msg => {
+                    displayMessage(msg.sender_id, msg.content);
+                });
+                lastMessageId = data[data.length - 1].id;
+            }
+        }
+
+        function startUpdating() {
+            if (updateInterval) {
+                clearInterval(updateInterval);
+            }
+            updateInterval = setInterval(fetchNewMessages, 10000); // 10秒ごとに実行
+        }
+
+        function stopUpdating() {
+            if (updateInterval) {
+                clearInterval(updateInterval);
+                updateInterval = null;
             }
         }
 
@@ -201,6 +228,15 @@
             }
             document.cookie = name + "=" + (value || "")  + expires + "; path=/";
         }
+
+        function generateRandomId() {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            let result = '';
+            for (let i = 0; i < 6; i++) {
+                result += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return result;
+        }
         
         function loadUserInfo() {
             const idCookie = getCookie('myTerminalId');
@@ -210,7 +246,9 @@
                 myId = idCookie;
                 print(`あなたのID: ${myId}`);
             } else {
-                print("'/id'と入力してIDを生成してください。");
+                myId = generateRandomId();
+                setCookie('myTerminalId', myId, 365);
+                print(`新しいIDが生成されました: ${myId}`, 'system');
             }
 
             if (nameCookie) {
@@ -218,13 +256,6 @@
                 print(`あなたの名前: ${myName}`);
             } else {
                 myName = '';
-            }
-        }
-
-        function checkConnectionStatus() {
-            const status = getCookie('isConnected');
-            if (status === 'true') {
-                connectToBoard();
             }
         }
 
@@ -264,8 +295,8 @@
             switch (mainCommand) {
                 case 'help':
                     print("利用可能なコマンド:");
-                    print("&nbsp;&nbsp;<b>/connect</b>    - 掲示板に接続します。");
-                    print("&nbsp;&nbsp;<b>/disconnect</b> - 掲示板から切断します。");
+                    print("&nbsp;&nbsp;<b>/connect</b>    - 掲示板に接続し、10秒ごとに更新を開始します。");
+                    print("&nbsp;&nbsp;<b>/disconnect</b> - 掲示板から切断し、更新を停止します。");
                     print("&nbsp;&nbsp;<b>/id</b>         - あなたのIDと名前を表示します。");
                     print("&nbsp;&nbsp;<b>/name</b> [新しい名前] - 自分の名前を変更します。");
                     if (myId === 'X79K07' || myId === 'VYIP9F') {
@@ -282,8 +313,6 @@
                         } else {
                             print("名前はまだ設定されていません。", 'system');
                         }
-                    } else {
-                        print("'/id'と入力してIDを生成してください。", 'system');
                     }
                     break;
                 
@@ -303,13 +332,19 @@
                     break;
 
                 case '/disconnect':
-                    disconnectFromBoard();
+                    if (isConnected) {
+                        isConnected = false;
+                        print("掲示板から切断しました。", 'system');
+                        stopUpdating();
+                    } else {
+                        print("すでに切断されています。", 'system');
+                    }
                     break;
                 
                 case '/clear':
                     const allowedIds = ['X79K07', 'VYIP9F'];
                     if (allowedIds.includes(myId)) {
-                        terminal.innerHTML = "<div>ようこそ！</div><div>'/id'と入力してIDを生成、'/connect'で掲示板に接続できます。</div><div>'help'でコマンドを確認できます。</div><br>";
+                        terminal.innerHTML = "<div>ようこそ！</div><div>'/connect'で掲示板に接続できます。</div><div>'help'でコマンドを確認できます。</div><br>";
                         if (isConnected) {
                             connectToBoard();
                         }
@@ -332,7 +367,6 @@
 
         loadUserInfo();
         initializeSupabase();
-        checkConnectionStatus(); // ページ読み込み時に接続状態をチェック
     </script>
 </body>
 </html>
