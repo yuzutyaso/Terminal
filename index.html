@@ -20,51 +20,7 @@
         }
 
         #terminal-view {
-            display: block; /* デフォルトで表示 */
-        }
-        
-        #calculator-view {
-            display: none; /* デフォルトで非表示 */
-            width: 100%;
-            height: 90vh;
-            border: 1px solid #333;
-            padding: 10px;
-            box-sizing: border-box;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-        }
-
-        #calculator-display {
-            background-color: #333;
-            border: 1px solid #555;
-            color: #f0f0f0;
-            font-size: 2em;
-            padding: 10px;
-            width: 80%;
-            text-align: right;
-            margin-bottom: 10px;
-        }
-
-        #calculator-buttons {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 10px;
-        }
-
-        .calc-btn {
-            background-color: #555;
-            color: #f0f0f0;
-            border: none;
-            padding: 20px;
-            font-size: 1.5em;
-            cursor: pointer;
-            border-radius: 5px;
-        }
-
-        .calc-btn:hover {
-            background-color: #777;
+            display: block;
         }
         
         #terminal {
@@ -126,26 +82,11 @@
             color: #fff;
             font-weight: bold;
         }
-        #calculator-btn {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            padding: 10px 15px;
-            font-size: 16px;
-            background-color: #4CAF50;
-            border: none;
-            color: white;
-            cursor: pointer;
-            border-radius: 5px;
-            z-index: 100;
-        }
     </style>
 </head>
 <body>
 
     <div id="app-container">
-        <button id="calculator-btn">電卓</button>
-
         <div id="terminal-view">
             <div id="terminal">
                 <div>ようこそ！</div>
@@ -159,30 +100,6 @@
                 <input type="text" id="command-line" autofocus>
             </div>
         </div>
-
-        <div id="calculator-view">
-            <div id="calculator-display">0</div>
-            <div id="calculator-buttons">
-                <button class="calc-btn" onclick="clearCalculator()">C</button>
-                <button class="calc-btn" onclick="appendInput('/')">/</button>
-                <button class="calc-btn" onclick="appendInput('*')">*</button>
-                <button class="calc-btn" onclick="appendInput('7')">7</button>
-                <button class="calc-btn" onclick="appendInput('8')">8</button>
-                <button class="calc-btn" onclick="appendInput('9')">9</button>
-                <button class="calc-btn" onclick="appendInput('-')">-</button>
-                <button class="calc-btn" onclick="appendInput('4')">4</button>
-                <button class="calc-btn" onclick="appendInput('5')">5</button>
-                <button class="calc-btn" onclick="appendInput('6')">6</button>
-                <button class="calc-btn" onclick="appendInput('+')">+</button>
-                <button class="calc-btn" onclick="appendInput('1')">1</button>
-                <button class="calc-btn" onclick="appendInput('2')">2</button>
-                <button class="calc-btn" onclick="appendInput('3')">3</button>
-                <button class="calc-btn" onclick="calculateResult()">=</button>
-                <button class="calc-btn" onclick="appendInput('0')">0</button>
-                <button class="calc-btn" onclick="appendInput('.')">.</button>
-                <button class="calc-btn" onclick="toggleViews()">戻る</button>
-            </div>
-        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -190,9 +107,6 @@
         const terminal = document.getElementById('terminal');
         const commandLine = document.getElementById('command-line');
         const terminalView = document.getElementById('terminal-view');
-        const calculatorView = document.getElementById('calculator-view');
-        const calculatorBtn = document.getElementById('calculator-btn');
-        const calculatorDisplay = document.getElementById('calculator-display');
 
         // --- ここをあなたのSupabaseプロジェクトの情報に置き換えてください ---
         const SUPABASE_URL = 'https://zlbfsyixwncpictplcvk.supabase.co'; 
@@ -207,46 +121,12 @@
         let lastMessageId = 0;
         let currentInput = '';
 
-        function toggleViews() {
-            if (terminalView.style.display === 'none') {
-                terminalView.style.display = 'block';
-                calculatorView.style.display = 'none';
-                calculatorBtn.style.display = 'block';
-                commandLine.focus();
-            } else {
-                terminalView.style.display = 'none';
-                calculatorView.style.display = 'flex';
-                calculatorBtn.style.display = 'none';
-            }
-        }
-        
-        function appendInput(value) {
-            if (calculatorDisplay.textContent === '0' && value !== '.') {
-                calculatorDisplay.textContent = value;
-            } else {
-                calculatorDisplay.textContent += value;
-            }
-        }
-
-        function clearCalculator() {
-            calculatorDisplay.textContent = '0';
-        }
-
-        function calculateResult() {
-            try {
-                const result = eval(calculatorDisplay.textContent);
-                calculatorDisplay.textContent = result;
-            } catch (error) {
-                calculatorDisplay.textContent = 'Error';
-            }
-        }
-
         async function initializeSupabase() {
             try {
                 const { createClient } = supabase;
                 supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
                 print("Supabaseクライアントを初期化しました。", 'system');
-                await connectToBoard(); // 初期化後に自動接続
+                await connectToBoard();
             } catch (error) {
                 print(`Supabaseへの接続に失敗しました: ${error.message}`, 'system');
             }
@@ -318,7 +198,7 @@
             if (updateInterval) {
                 clearInterval(updateInterval);
             }
-            updateInterval = setInterval(fetchNewMessages, 10000); // 10秒ごとに実行
+            updateInterval = setInterval(fetchNewMessages, 10000);
         }
 
         function stopUpdating() {
@@ -521,8 +401,6 @@
         document.body.addEventListener('click', function() {
             commandLine.focus();
         });
-
-        calculatorBtn.addEventListener('click', toggleViews);
 
         loadUserInfo();
         initializeSupabase();
