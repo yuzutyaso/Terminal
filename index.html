@@ -82,6 +82,11 @@
             color: #fff;
             font-weight: bold;
         }
+        .timestamp {
+            font-size: 0.8em;
+            color: #777;
+            margin-left: 8px;
+        }
     </style>
 </head>
 <body>
@@ -166,7 +171,7 @@
 
             if (data.length > 0) {
                 data.forEach(msg => {
-                    displayMessage(msg.sender_id, msg.content);
+                    displayMessage(msg.sender_id, msg.content, msg.created_at);
                 });
                 lastMessageId = data[data.length - 1].id;
             }
@@ -188,7 +193,7 @@
 
             if (data.length > 0) {
                 data.forEach(msg => {
-                    displayMessage(msg.sender_id, msg.content);
+                    displayMessage(msg.sender_id, msg.content, msg.created_at);
                 });
                 lastMessageId = data[data.length - 1].id;
             }
@@ -208,12 +213,26 @@
             }
         }
 
-        function displayMessage(sender, content) {
+        function formatTimestamp(timestamp) {
+            const date = new Date(timestamp);
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const seconds = String(date.getSeconds()).padStart(2, '0');
+            return `${hours}:${minutes}:${seconds}`;
+        }
+        
+        function displayMessage(sender, content, timestamp = null) {
             const isMyMessage = sender === myName || sender === myId;
             const displayName = sender;
             const className = isMyMessage ? 'my-message' : 'other-message';
-            const message = `[${displayName}] ${content}`;
-            print(message, className);
+            
+            let messageHtml = `[${displayName}] ${content}`;
+            if (timestamp) {
+                const formattedTime = formatTimestamp(timestamp);
+                messageHtml += `<span class="timestamp">${formattedTime}</span>`;
+            }
+
+            print(messageHtml, className);
         }
         
         function print(message, className = 'message') {
