@@ -125,6 +125,7 @@
         let updateInterval = null;
         let lastMessageId = 0;
         let currentInput = '';
+        const allowedUploaderId = 'DE39D5'; // ファイルアップロードを許可するID
 
         async function initializeSupabase() {
             try {
@@ -332,6 +333,7 @@
                     print("&nbsp;&nbsp;<b>/id</b>         - あなたのIDと名前を表示します。");
                     print("&nbsp;&nbsp;<b>/name</b> [新しい名前] - 自分の名前を変更します。");
                     print("&nbsp;&nbsp;<b>/clear</b>      - データベースのメッセージをすべて削除します。 (パスワードが必要です)");
+                    print("&nbsp;&nbsp;<b>/upload</b>     - ファイルをアップロードします。 (ID:DE39D5のみ)");
                     print("&nbsp;&nbsp;<b>[メッセージ]</b> - 全員にメッセージを投稿します。");
                     break;
                 
@@ -407,6 +409,15 @@
                     } else {
                          print("パスワードが入力されませんでした。", 'system');
                     }
+                    break;
+
+                case '/upload':
+                    if (myId !== allowedUploaderId) {
+                        print("このコマンドを実行する権限がありません。", 'system');
+                        return;
+                    }
+                    // ここにファイルアップロードのロジックを追加
+                    print("ファイルアップロード機能は現在開発中です。", 'system');
                     break;
 
                 default:
