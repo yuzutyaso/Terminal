@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web　Terminal</title>
+    <title>Terminal v1.4.1</title>
     <style>
         body {
             background-color: #1a1a1a;
@@ -64,11 +64,11 @@
             color: #ccc;
         }
         .my-message {
-            color: #6495ed; /* 自分の投稿の色 */
+            color: #6495ed;
             margin-left: 20px;
         }
         .other-message {
-            color: #f08080; /* 他の投稿の色 */
+            color: #f08080;
         }
         .system {
             color: #fff;
@@ -79,7 +79,8 @@
 <body>
 
     <div id="terminal">
-        <div>If you come to this site and don't understand anything, just send a message saying "help." Unless you're an idiot, you'll understand...</div>
+      <div>If you come to this site and don't understand anything, just send a message saying "help." Unless you're an idiot, you'll understand...</div>
+    
         <br>
     </div>
     
@@ -99,18 +100,34 @@
         // -----------------------------------------------------------
 
         let myId = '';
+        let myName = '';
         let supabaseClient = null;
+        let isConnected = false;
 
-        // Supabaseの初期化
         async function initializeSupabase() {
             try {
-                // Supabaseクライアントの初期化
                 const { createClient } = supabase;
                 supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                print("Supabaseクライアントを初期化しました。", 'system');
+            } catch (error) {
+                print(`Supabaseへの接続に失敗しました: ${error.message}`, 'system');
+            }
+        }
+        
+        async function connectToBoard() {
+            if (!supabaseClient) {
+                print("Supabaseクライアントが初期化されていません。", 'system');
+                return;
+            }
 
-                print("Supabase接続中...", 'system');
+            try {
+                if (isConnected) {
+                    print("すでに掲示板に接続しています。", 'system');
+                    return;
+                }
+                
+                print("掲示板に接続中...", 'system');
 
-                // メッセージをリアルタイムで購読
                 supabaseClient
                     .channel('messages_channel')
                     .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => {
@@ -121,7 +138,6 @@
                     })
                     .subscribe();
 
-                // 既存のメッセージを取得して表示
                 const { data, error } = await supabaseClient.from('messages').select('*').order('created_at', { ascending: true });
                 if (error) throw error;
                 
@@ -129,14 +145,16 @@
                     displayMessage(msg.sender_id, msg.content);
                 });
 
+                isConnected = true;
                 print("掲示板に接続しました。メッセージを投稿できます。", 'system');
             } catch (error) {
-                print(`Supabaseへの接続に失敗しました: ${error.message}`, 'system');
+                print(`掲示板への接続に失敗しました: ${error.message}`, 'system');
             }
         }
 
         function displayMessage(sender, content) {
-            const isMyMessage = sender === myId;
+            const isMyMessage = sender === myName || sender === myId;
+            const displayName = myName || myId;
             const className = isMyMessage ? 'my-message' : 'other-message';
             const message = `[${sender}] ${content}`;
             print(message, className);
@@ -171,13 +189,22 @@
             document.cookie = name + "=" + (value || "")  + expires + "; path=/";
         }
         
-        function loadMyId() {
+        function loadUserInfo() {
             const idCookie = getCookie('myTerminalId');
+            const nameCookie = getCookie('myTerminalName');
+            
             if (idCookie) {
                 myId = idCookie;
                 print(`あなたのID: ${myId}`);
             } else {
                 print("'/id'と入力してIDを生成してください。");
+            }
+
+            if (nameCookie) {
+                myName = nameCookie;
+                print(`あなたの名前: ${myName}`);
+            } else {
+                myName = '';
             }
         }
 
@@ -186,7 +213,8 @@
                 const command = commandLine.value.trim();
                 
                 if (command) {
-                    print(`<div class="line"><span class="prompt">$</span><div>${command}</div></div>`);
+                    const displayNameForPrompt = myName || myId || 'Anonymous';
+                    print(`<div class="line"><span class="prompt">$ ${displayNameForPrompt}: </span><div>${command}</div></div>`);
                 }
 
                 await handleCommand(command);
@@ -198,13 +226,14 @@
         async function handleCommand(command) {
             const parts = command.split(' ');
             const mainCommand = parts[0].toLowerCase();
+            const args = parts.slice(1);
             const fullCommand = command;
 
-            // 掲示板への投稿
-            if (myId && fullCommand && mainCommand !== '/id' && mainCommand !== 'help' && supabaseClient) {
+            if (isConnected && myId && fullCommand && !mainCommand.startsWith('/') && mainCommand !== 'help') {
+                const sender = myName || myId;
                 const { error } = await supabaseClient
                     .from('messages')
-                    .insert({ sender_id: myId, content: fullCommand });
+                    .insert({ sender_id: sender, content: fullCommand });
 
                 if (error) {
                     print(`投稿に失敗しました: ${error.message}`, 'system');
@@ -215,18 +244,63 @@
             switch (mainCommand) {
                 case 'help':
                     print("利用可能なコマンド:");
-                    print("&nbsp;&nbsp;<b>/id</b>      - あなたのIDを生成または表示します。");
-                    print("&nbsp;&nbsp;<b>[メッセージ]</b> - 全員にメッセージを投稿します。");
+                    print("&nbsp;&nbsp;<b>/connect</b>    - 掲示板に接続します。");
+                    print("&nbsp;&nbsp;<b>/disconnect</b> - 掲示板から切断します。");
+                    print("&nbsp;&nbsp;<b>/id</b>         - あなたのIDと名前を表示します。");
+                    print("&nbsp;&nbsp;<b>/name</b> [新しい名前] - 自分の名前を変更します。");
+                    if (myId === 'X79K07' || myId === 'VYIP9F') {
+                        print("&nbsp;&nbsp;<b>/clear</b>      - ターミナル画面をクリアします。");
+                    }
+                    print("&nbsp;&nbsp;<b>[メッセージ]</b>　　- メッセージを投稿します。");
                     break;
                 
                 case '/id':
                     if (myId) {
-                        print(`あなたのID: ${myId}`);
+                        print(`あなたのID: ${myId}`, 'system');
+                        if (myName) {
+                            print(`現在の名前: ${myName}`, 'system');
+                        } else {
+                            print("名前はまだ設定されていません。", 'system');
+                        }
                     } else {
-                        const newId = Math.random().toString(36).substring(2, 8).toUpperCase();
-                        myId = newId;
-                        setCookie('myTerminalId', myId, 365); // 1年間有効
-                        print(`新しいIDが生成されました: ${myId}`);
+                        print("'/id'と入力してIDを生成してください。", 'system');
+                    }
+                    break;
+                
+                case '/name':
+                    if (args.length > 0) {
+                        const newName = args.join(' ');
+                        myName = newName;
+                        setCookie('myTerminalName', myName, 365);
+                        print(`名前が'${myName}'に変更されました。`, 'system');
+                    } else {
+                        print("使用方法: /name [新しい名前]", 'system');
+                    }
+                    break;
+
+                case '/connect':
+                    connectToBoard();
+                    break;
+
+                case '/disconnect':
+                    if (isConnected) {
+                        supabaseClient.removeAllChannels();
+                        isConnected = false;
+                        print("掲示板から切断しました。", 'system');
+                    } else {
+                        print("すでに切断されています。", 'system');
+                    }
+                    break;
+                
+                case '/clear':
+                    const allowedIds = ['X79K07', 'VYIP9F'];
+                    if (allowedIds.includes(myId)) {
+                        terminal.innerHTML = "<div>ようこそ！</div><div>'/id'と入力してIDを生成、'/connect'で掲示板に接続できます。</div><div>'help'でコマンドを確認できます。</div><br>";
+                        if (isConnected) {
+                            connectToBoard();
+                        }
+                    } else {
+                        print("このコマンドを実行する権限がありません。", 'system');
                     }
                     break;
 
@@ -242,7 +316,7 @@
             commandLine.focus();
         });
 
-        loadMyId();
+        loadUserInfo();
         initializeSupabase();
     </script>
 </body>
