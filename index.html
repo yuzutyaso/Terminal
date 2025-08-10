@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Terminal</title>
     <style>
+        /* CSS: サイトの見た目を設定します */
         body {
             background-color: #1a1a1a;
             color: #f0f0f0;
@@ -87,10 +88,10 @@
             pyodide = await loadPyodide();
             print("Python environment loaded. Type 'help' to see available commands.");
             
-            print("Installing 'requests' and 'sqlite3' modules...");
-            await pyodide.loadPackage("requests");
+            print("Installing 'sqlite3' and 'requests' modules...");
             await pyodide.loadPackage("sqlite3");
-            print("Done. You can now use `import sqlite3` in python.");
+            await pyodide.loadPackage("requests");
+            print("Done. You can now use `import sqlite3` and `import requests` in python.");
         }
         initializePyodide();
 
@@ -137,6 +138,9 @@
                     print("&nbsp;&nbsp;<b>fortune</b>  - Displays a random quote or joke.");
                     print("&nbsp;&nbsp;<b>js</b> [code]    - Executes JavaScript code. (e.g., 'js 2 * 10')");
                     print("&nbsp;&nbsp;<b>python</b> [code]- Executes Python code. (e.g., 'python print(2 * 10)')");
+                    print("&nbsp;&nbsp;<b>pip</b> [package]- Installs a Python package. (e.g., 'pip numpy')");
+                    print("&nbsp;&nbsp;<b>pip -r</b> [file] - Installs packages from a requirements file. (e.g., 'pip -r requirements.txt')");
+                    print("&nbsp;&nbsp;<b>upload</b>    - Uploads a file to the terminal's virtual filesystem.");
                     print("<br>");
                     print("<b>Dangerous Commands (Simulated):</b>");
                     print("&nbsp;&nbsp;<b>rm -rf /</b>   - <b>(DANGER)</b> Simulates a system wipe.");
@@ -255,6 +259,69 @@
                             }
                         } catch (e) {
                             print(`<span style="color: red;">Python Error: ${e}</span>`);
+                        }
+                    } else {
+                        print("Python environment is still loading. Please wait...");
+                    }
+                    break;
+
+                case 'upload':
+                    const fileInput = document.createElement('input');
+                    fileInput.type = 'file';
+                    fileInput.accept = '.txt';
+                    fileInput.onchange = async (event) => {
+                        const file = event.target.files[0];
+                        if (file) {
+                            print(`Uploading file: ${file.name}...`);
+                            const fileContent = await file.text();
+                            
+                            try {
+                                pyodide.FS.writeFile(file.name, fileContent, { encoding: "utf8" });
+                                print(`File '${file.name}' uploaded successfully.`);
+                            } catch (e) {
+                                print(`<span style="color: red;">Error uploading file: ${e}</span>`);
+                            }
+                        }
+                    };
+                    fileInput.click();
+                    break;
+
+                case 'pip':
+                    const pipArgs = args.join(' ');
+                    if (pyodide) {
+                        if (pipArgs.startsWith('-r')) {
+                            const filename = pipArgs.split(' ')[1];
+                            if (filename) {
+                                print(`Installing packages from '${filename}'...`);
+                                try {
+                                    const requirements = pyodide.FS.readFile(filename, { encoding: "utf8" });
+                                    const packages = requirements.split('\n').map(line => line.trim()).filter(line => line.length > 0 && !line.startsWith('#'));
+                                    
+                                    for (const pkg of packages) {
+                                        print(`Installing: ${pkg}...`);
+                                        await pyodide.loadPackage(pkg);
+                                    }
+                                    print(`Successfully installed all packages from '${filename}'.`);
+                                } catch (e) {
+                                    print(`<span style="color: red;">Error: Failed to read file or install packages. Make sure the file exists and the package names are correct.</span>`);
+                                    console.error(e);
+                                }
+                            } else {
+                                print("Usage: pip -r [filename]");
+                            }
+                        } else {
+                            const packageName = pipArgs;
+                            if (packageName) {
+                                print(`Installing package: ${packageName}...`);
+                                try {
+                                    await pyodide.loadPackage(packageName);
+                                    print(`Successfully installed ${packageName}.`);
+                                } catch (e) {
+                                    print(`<span style="color: red;">Error installing package: ${e}</span>`);
+                                }
+                            } else {
+                                print("Usage: pip [package_name] or pip -r [filename]");
+                            }
                         }
                     } else {
                         print("Python environment is still loading. Please wait...");
