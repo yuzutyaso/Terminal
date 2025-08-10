@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Terminal</title>
+    <title>みんなのリアルタイム掲示板</title>
     <style>
         body {
             background-color: #1a1a1a;
@@ -15,6 +15,57 @@
             padding: 20px;
         }
 
+        #app-container {
+            position: relative;
+        }
+
+        #terminal-view {
+            display: block;
+        }
+        
+        #calculator-view {
+            display: none; /* 初期状態で非表示 */
+            width: 100%;
+            height: 90vh;
+            border: 1px solid #333;
+            padding: 10px;
+            box-sizing: border-box;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #calculator-display {
+            background-color: #333;
+            border: 1px solid #555;
+            color: #f0f0f0;
+            font-size: 2em;
+            padding: 10px;
+            width: 80%;
+            text-align: right;
+            margin-bottom: 10px;
+        }
+
+        #calculator-buttons {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+        }
+
+        .calc-btn {
+            background-color: #555;
+            color: #f0f0f0;
+            border: none;
+            padding: 20px;
+            font-size: 1.5em;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+
+        .calc-btn:hover {
+            background-color: #777;
+        }
+        
         #terminal {
             width: 100%;
             height: 90vh;
@@ -74,27 +125,74 @@
             color: #fff;
             font-weight: bold;
         }
+        #calculator-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            padding: 10px 15px;
+            font-size: 16px;
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            cursor: pointer;
+            border-radius: 5px;
+            z-index: 100;
+        }
     </style>
 </head>
 <body>
 
-    <div id="terminal">
-        <div>ようこそ！</div>
-        <div>'/connect'で掲示板に接続できます。</div>
-        <div>'help'でコマンドを確認できます。</div>
-        <br>
-    </div>
-    
-    <div class="input-area">
-        <span class="prompt">$</span>
-        <input type="text" id="command-line" autofocus>
+    <div id="app-container">
+        <button id="calculator-btn">電卓</button>
+
+        <div id="terminal-view">
+            <div id="terminal">
+                <div>ようこそ！</div>
+                <div>掲示板に接続し、10秒ごとに自動更新を開始しました。</div>
+                <div>'help'でコマンドを確認できます。</div>
+                <br>
+            </div>
+            
+            <div class="input-area">
+                <span class="prompt">$</span>
+                <input type="text" id="command-line" autofocus>
+            </div>
+        </div>
+
+        <div id="calculator-view">
+            <div id="calculator-display">0</div>
+            <div id="calculator-buttons">
+                <button class="calc-btn" onclick="clearCalculator()">C</button>
+                <button class="calc-btn" onclick="appendInput('/')">/</button>
+                <button class="calc-btn" onclick="appendInput('*')">*</button>
+                <button class="calc-btn" onclick="appendInput('7')">7</button>
+                <button class="calc-btn" onclick="appendInput('8')">8</button>
+                <button class="calc-btn" onclick="appendInput('9')">9</button>
+                <button class="calc-btn" onclick="appendInput('-')">-</button>
+                <button class="calc-btn" onclick="appendInput('4')">4</button>
+                <button class="calc-btn" onclick="appendInput('5')">5</button>
+                <button class="calc-btn" onclick="appendInput('6')">6</button>
+                <button class="calc-btn" onclick="appendInput('+')">+</button>
+                <button class="calc-btn" onclick="appendInput('1')">1</button>
+                <button class="calc-btn" onclick="appendInput('2')">2</button>
+                <button class="calc-btn" onclick="appendInput('3')">3</button>
+                <button class="calc-btn" onclick="calculateResult()">=</button>
+                <button class="calc-btn" onclick="appendInput('0')">0</button>
+                <button class="calc-btn" onclick="appendInput('.')">.</button>
+                <button class="calc-btn" onclick="toggleViews()">戻る</button>
+            </div>
+        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
         const terminal = document.getElementById('terminal');
         const commandLine = document.getElementById('command-line');
-        
+        const terminalView = document.getElementById('terminal-view');
+        const calculatorView = document.getElementById('calculator-view');
+        const calculatorBtn = document.getElementById('calculator-btn');
+        const calculatorDisplay = document.getElementById('calculator-display');
+
         // --- ここをあなたのSupabaseプロジェクトの情報に置き換えてください ---
         const SUPABASE_URL = 'https://zlbfsyixwncpictplcvk.supabase.co'; 
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpsYmZzeWl4d25jcGljdHBsY3ZrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ4MDkwOTcsImV4cCI6MjA3MDM4NTA5N30.AGoC-NxJTJPKnyU1pb2ICONGYd4b5EzdW6nkcOyXdao';
@@ -106,12 +204,48 @@
         let isConnected = false;
         let updateInterval = null;
         let lastMessageId = 0;
+        let currentInput = '';
+
+        function toggleViews() {
+            if (terminalView.style.display === 'none') {
+                terminalView.style.display = 'block';
+                calculatorView.style.display = 'none';
+                calculatorBtn.style.display = 'block';
+                commandLine.focus();
+            } else {
+                terminalView.style.display = 'none';
+                calculatorView.style.display = 'flex';
+                calculatorBtn.style.display = 'none';
+            }
+        }
+        
+        function appendInput(value) {
+            if (calculatorDisplay.textContent === '0' && value !== '.') {
+                calculatorDisplay.textContent = value;
+            } else {
+                calculatorDisplay.textContent += value;
+            }
+        }
+
+        function clearCalculator() {
+            calculatorDisplay.textContent = '0';
+        }
+
+        function calculateResult() {
+            try {
+                const result = eval(calculatorDisplay.textContent);
+                calculatorDisplay.textContent = result;
+            } catch (error) {
+                calculatorDisplay.textContent = 'Error';
+            }
+        }
 
         async function initializeSupabase() {
             try {
                 const { createClient } = supabase;
                 supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
                 print("Supabaseクライアントを初期化しました。", 'system');
+                await connectToBoard();
             } catch (error) {
                 print(`Supabaseへの接続に失敗しました: ${error.message}`, 'system');
             }
@@ -130,11 +264,11 @@
                 }
                 
                 print("掲示板に接続中...", 'system');
-                setCookie('isConnected', 'true', 365); // 接続状態をCookieに保存
 
                 await fetchAllMessages();
 
                 isConnected = true;
+                setCookie('isConnected', 'true', 365);
                 print("掲示板に接続しました。メッセージを投稿できます。", 'system');
                 startUpdating();
             } catch (error) {
@@ -183,7 +317,7 @@
             if (updateInterval) {
                 clearInterval(updateInterval);
             }
-            updateInterval = setInterval(fetchNewMessages, 10000); // 10秒ごとに実行
+            updateInterval = setInterval(fetchNewMessages, 10000);
         }
 
         function stopUpdating() {
@@ -242,7 +376,6 @@
         function loadUserInfo() {
             const idCookie = getCookie('myTerminalId');
             const nameCookie = getCookie('myTerminalName');
-            const isConnectedCookie = getCookie('isConnected');
             
             if (idCookie) {
                 myId = idCookie;
@@ -258,10 +391,6 @@
                 print(`あなたの名前: ${myName}`);
             } else {
                 myName = '';
-            }
-            
-            if (isConnectedCookie === 'true') {
-                connectToBoard();
             }
         }
 
@@ -299,12 +428,11 @@
             switch (mainCommand) {
                 case 'help':
                     print("利用可能なコマンド:");
-                    print("&nbsp;&nbsp;<b>/connect</b>    - 掲示板に接続し、10秒ごとに更新を開始します。");
                     print("&nbsp;&nbsp;<b>/disconnect</b> - 掲示板から切断し、更新を停止します。");
                     print("&nbsp;&nbsp;<b>/id</b>         - あなたのIDと名前を表示します。");
                     print("&nbsp;&nbsp;<b>/name</b> [新しい名前] - 自分の名前を変更します。");
                     print("&nbsp;&nbsp;<b>/clear</b>      - データベースのメッセージをすべて削除します。 (パスワードが必要です)");
-                    print("&nbsp;&nbsp;<b>[メッセージ]</b> - (接続時のみ) 全員にメッセージを投稿します。");
+                    print("&nbsp;&nbsp;<b>[メッセージ]</b> - 全員にメッセージを投稿します。");
                     break;
                 
                 case '/id':
@@ -329,14 +457,10 @@
                     }
                     break;
 
-                case '/connect':
-                    connectToBoard();
-                    break;
-
                 case '/disconnect':
                     if (isConnected) {
                         isConnected = false;
-                        setCookie('isConnected', 'false', 365); // 接続状態をCookieに保存
+                        setCookie('isConnected', 'false', 365);
                         print("掲示板から切断しました。", 'system');
                         stopUpdating();
                     } else {
@@ -368,7 +492,7 @@
                                     throw deleteError;
                                 }
                                 
-                                terminal.innerHTML = "<div>ようこそ！</div><div>'/connect'で掲示板に接続できます。</div><div>'help'でコマンドを確認できます。</div><br>";
+                                terminal.innerHTML = "<div>ようこそ！</div><div>掲示板に接続し、10秒ごとに自動更新を開始しました。</div><div>'help'でコマンドを確認できます。</div><br>";
                                 print("データベースのメッセージをすべて削除しました。", 'system');
                                 
                                 if (isConnected) {
@@ -396,6 +520,8 @@
         document.body.addEventListener('click', function() {
             commandLine.focus();
         });
+
+        calculatorBtn.addEventListener('click', toggleViews);
 
         loadUserInfo();
         initializeSupabase();
