@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web Terminal</title>
+    <title>My Terminal</title>
     <style>
         /* CSS: サイトの見た目を設定します */
         body {
@@ -67,7 +67,7 @@
 <body>
 
     <div id="terminal">
-        <div>Welcome to Web Terminal!</div>
+        <div>Welcome to My Terminal!</div>
         <div>Type 'help' to see available commands.</div>
         <br>
     </div>
@@ -90,6 +90,11 @@
             print("Loading Python environment... This might take a moment.");
             pyodide = await loadPyodide();
             print("Python environment loaded. Type 'help' to see available commands.");
+            
+            // requestsモジュールを事前にインストールしておく
+            print("Installing 'requests' module...");
+            await pyodide.loadPackage("requests");
+            print("Done. You can now use `import requests` in python.");
         }
         initializePyodide();
 
@@ -102,26 +107,22 @@
         }
 
         // Enterキーが押されたときの処理
-        commandLine.addEventListener('keydown', function(event) {
+        commandLine.addEventListener('keydown', async function(event) {
             if (event.key === 'Enter') {
-                const command = commandLine.value.trim(); // 入力されたコマンドを取得
+                const command = commandLine.value.trim();
                 
-                // 入力されたコマンドを画面に表示
                 if (command) {
                     print(`<div class="line"><span class="prompt">$</span><div>${command}</div></div>`);
                 }
 
-                // コマンドに応じた処理を実行
-                handleCommand(command);
+                await handleCommand(command);
 
-                // 入力欄をクリア
                 commandLine.value = '';
             }
         });
 
-        // コマンドを処理する関数
-        function handleCommand(command) {
-            // コマンドと引数を分割する
+        // コマンドを処理する関数 (asyncに変更)
+        async function handleCommand(command) {
             const parts = command.split(' ');
             const mainCommand = parts[0].toLowerCase();
             const args = parts.slice(1);
@@ -241,8 +242,29 @@
                     const pythonCode = args.join(' ');
                     if (pyodide) {
                         try {
+                            // Pythonの出力を捕捉して表示
+                            pyodide.set
+                            let output = "";
+                            pyodide.setStdout({
+                                isatty: true,
+                                write: (buf) => {
+                                    const str = new TextDecoder("utf-8").decode(buf);
+                                    output += str;
+                                },
+                                flush: () => {
+                                    print(output);
+                                    output = "";
+                                }
+                            });
+                            
+                            // requestsモジュールがロードされているか確認
+                            // await pyodide.loadPackage("requests"); // 初期化時に既にロード済み
+                            
                             const result = pyodide.runPython(pythonCode);
-                            print(result);
+                            
+                            if (result !== undefined) {
+                                print(result);
+                            }
                         } catch (e) {
                             print(`<span style="color: red;">Python Error: ${e}</span>`);
                         }
