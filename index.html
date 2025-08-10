@@ -30,6 +30,7 @@
             border: 1px solid #333;
             padding: 10px;
             box-sizing: border-box;
+            display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
@@ -50,8 +51,6 @@
             display: grid;
             grid-template-columns: repeat(4, 1fr);
             gap: 10px;
-            width: 80%;
-            max-width: 400px;
         }
 
         .calc-btn {
@@ -61,34 +60,11 @@
             padding: 20px;
             font-size: 1.5em;
             cursor: pointer;
-            border-radius: 50%;
-            aspect-ratio: 1 / 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            border-radius: 5px;
         }
 
         .calc-btn:hover {
             background-color: #777;
-        }
-
-        .calc-btn.orange {
-            background-color: #ff9500;
-        }
-
-        .calc-btn.gray {
-            background-color: #8f8f8f;
-        }
-
-        #zero {
-            grid-column: span 2;
-            border-radius: 40px;
-        }
-        
-        #back {
-            grid-column: span 2;
-            background-color: #555;
-            border-radius: 40px;
         }
         
         #terminal {
@@ -154,33 +130,21 @@
             position: absolute;
             top: 20px;
             right: 20px;
-            width: 40px;
-            height: 40px;
-            background-color: transparent;
+            padding: 10px 15px;
+            font-size: 16px;
+            background-color: #4CAF50;
             border: none;
+            color: white;
             cursor: pointer;
+            border-radius: 5px;
             z-index: 100;
-        }
-        .calc-icon {
-            width: 100%;
-            height: 100%;
-            background-color: #f0f0f0;
-            mask-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M128 0c-17.7 0-32 14.3-32 32V64H64C28.7 64 0 92.7 0 128V448c0 35.3 28.7 64 64 64H448c35.3 0 64-28.7 64-64V128c0-35.3-28.7-64-64-64H416V32c0-17.7-14.3-32-32-32H128zM416 128V448H64V128H416zM320 256h-80V200c0-13.3-10.7-24-24-24s-24 10.7-24 24v56H160c-13.3 0-24 10.7-24 24s10.7 24 24 24h56v56c0 13.3 10.7 24 24 24s24-10.7 24-24V304h80c13.3 0 24-10.7 24-24s-10.7-24-24-24z"/></svg>');
-            -webkit-mask-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M128 0c-17.7 0-32 14.3-32 32V64H64C28.7 64 0 92.7 0 128V448c0 35.3 28.7 64 64 64H448c35.3 0 64-28.7 64-64V128c0-35.3-28.7-64-64-64H416V32c0-17.7-14.3-32-32-32H128zM416 128V448H64V128H416zM320 256h-80V200c0-13.3-10.7-24-24-24s-24 10.7-24 24v56H160c-13.3 0-24 10.7-24 24s10.7 24 24 24h56v56c0 13.3 10.7 24 24 24s24-10.7 24-24V304h80c13.3 0-24-10.7-24-24s-10.7-24-24-24z"/></svg>');
-            mask-repeat: no-repeat;
-            mask-position: center;
-        }
-        #calculator-btn:hover .calc-icon {
-            background-color: #ccc;
         }
     </style>
 </head>
 <body>
 
     <div id="app-container">
-        <button id="calculator-btn">
-            <div class="calc-icon"></div>
-        </button>
+        <button id="calculator-btn">電卓</button>
 
         <div id="terminal-view">
             <div id="terminal">
@@ -199,26 +163,24 @@
         <div id="calculator-view">
             <div id="calculator-display">0</div>
             <div id="calculator-buttons">
-                <button class="calc-btn gray" onclick="clearCalculator()">AC</button>
-                <button class="calc-btn gray" onclick="toggleSign()">+/-</button>
-                <button class="calc-btn gray" onclick="appendInput('%')">%</button>
-                <button class="calc-btn orange" onclick="appendInput('/')">/</button>
+                <button class="calc-btn" onclick="clearCalculator()">C</button>
+                <button class="calc-btn" onclick="appendInput('/')">/</button>
+                <button class="calc-btn" onclick="appendInput('*')">*</button>
                 <button class="calc-btn" onclick="appendInput('7')">7</button>
                 <button class="calc-btn" onclick="appendInput('8')">8</button>
                 <button class="calc-btn" onclick="appendInput('9')">9</button>
-                <button class="calc-btn orange" onclick="appendInput('*')">×</button>
+                <button class="calc-btn" onclick="appendInput('-')">-</button>
                 <button class="calc-btn" onclick="appendInput('4')">4</button>
                 <button class="calc-btn" onclick="appendInput('5')">5</button>
                 <button class="calc-btn" onclick="appendInput('6')">6</button>
-                <button class="calc-btn orange" onclick="appendInput('-')">-</button>
+                <button class="calc-btn" onclick="appendInput('+')">+</button>
                 <button class="calc-btn" onclick="appendInput('1')">1</button>
                 <button class="calc-btn" onclick="appendInput('2')">2</button>
                 <button class="calc-btn" onclick="appendInput('3')">3</button>
-                <button class="calc-btn orange" onclick="appendInput('+')">+</button>
-                <button class="calc-btn" id="zero" onclick="appendInput('0')">0</button>
+                <button class="calc-btn" onclick="calculateResult()">=</button>
+                <button class="calc-btn" onclick="appendInput('0')">0</button>
                 <button class="calc-btn" onclick="appendInput('.')">.</button>
-                <button class="calc-btn orange" onclick="calculateResult()">=</button>
-                <button class="calc-btn" id="back" onclick="toggleViews()">戻る</button>
+                <button class="calc-btn" onclick="toggleViews()">戻る</button>
             </div>
         </div>
     </div>
@@ -259,7 +221,7 @@
         }
         
         function appendInput(value) {
-            if (calculatorDisplay.textContent === '0' && value !== '.' && value !== '+' && value !== '-' && value !== '*' && value !== '/') {
+            if (calculatorDisplay.textContent === '0' && value !== '.') {
                 calculatorDisplay.textContent = value;
             } else {
                 calculatorDisplay.textContent += value;
@@ -270,19 +232,9 @@
             calculatorDisplay.textContent = '0';
         }
 
-        function toggleSign() {
-            if (calculatorDisplay.textContent.startsWith('-')) {
-                calculatorDisplay.textContent = calculatorDisplay.textContent.substring(1);
-            } else {
-                calculatorDisplay.textContent = '-' + calculatorDisplay.textContent;
-            }
-        }
-
         function calculateResult() {
             try {
-                let expression = calculatorDisplay.textContent;
-                expression = expression.replace(/×/g, '*').replace(/÷/g, '/');
-                const result = eval(expression);
+                const result = eval(calculatorDisplay.textContent);
                 calculatorDisplay.textContent = result;
             } catch (error) {
                 calculatorDisplay.textContent = 'Error';
@@ -294,7 +246,7 @@
                 const { createClient } = supabase;
                 supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
                 print("Supabaseクライアントを初期化しました。", 'system');
-                await connectToBoard();
+                await connectToBoard(); // 初期化後に自動接続
             } catch (error) {
                 print(`Supabaseへの接続に失敗しました: ${error.message}`, 'system');
             }
@@ -366,7 +318,7 @@
             if (updateInterval) {
                 clearInterval(updateInterval);
             }
-            updateInterval = setInterval(fetchNewMessages, 10000);
+            updateInterval = setInterval(fetchNewMessages, 10000); // 10秒ごとに実行
         }
 
         function stopUpdating() {
@@ -544,4 +496,36 @@
                                 terminal.innerHTML = "<div>ようこそ！</div><div>掲示板に接続し、10秒ごとに自動更新を開始しました。</div><div>'help'でコマンドを確認できます。</div><br>";
                                 print("データベースのメッセージをすべて削除しました。", 'system');
                                 
-                                if 
+                                if (isConnected) {
+                                    connectToBoard();
+                                }
+                            } else {
+                                print("パスワードが違います。", 'system');
+                            }
+                        } catch (error) {
+                            print(`エラーが発生しました: ${error.message}`, 'system');
+                        }
+                    } else {
+                         print("パスワードが入力されませんでした。", 'system');
+                    }
+                    break;
+
+                default:
+                    if(fullCommand) {
+                        print(`コマンドが見つかりません: ${fullCommand}. 'help'で利用可能なコマンドを確認してください。`);
+                    }
+                    break;
+            }
+        }
+        
+        document.body.addEventListener('click', function() {
+            commandLine.focus();
+        });
+
+        calculatorBtn.addEventListener('click', toggleViews);
+
+        loadUserInfo();
+        initializeSupabase();
+    </script>
+</body>
+</html>
