@@ -243,7 +243,6 @@
                     if (pyodide) {
                         try {
                             // Pythonの出力を捕捉して表示
-                            pyodide.set
                             let output = "";
                             pyodide.setStdout({
                                 isatty: true,
@@ -256,9 +255,6 @@
                                     output = "";
                                 }
                             });
-                            
-                            // requestsモジュールがロードされているか確認
-                            // await pyodide.loadPackage("requests"); // 初期化時に既にロード済み
                             
                             const result = pyodide.runPython(pythonCode);
                             
