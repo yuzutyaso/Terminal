@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Terminal v1.4.1</title>
+    <title>Terminal</title>
     <style>
         body {
             background-color: #1a1a1a;
@@ -79,8 +79,9 @@
 <body>
 
     <div id="terminal">
-      <div>If you come to this site and don't understand anything, just send a message saying "help." Unless you're an idiot, you'll understand...</div>
-    
+        <div>ようこそ！</div>
+        <div>'/id'と入力してIDを生成、'/connect'で掲示板に接続できます。</div>
+        <div>'help'でコマンドを確認できます。</div>
         <br>
     </div>
     
@@ -108,26 +109,27 @@
             try {
                 const { createClient } = supabase;
                 supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-                print("I have initialized the Supabase client.", 'system');
+                print("Supabaseクライアントを初期化しました。", 'system');
             } catch (error) {
-                print(`Failed to connect to Supabase: ${error.message}`, 'system');
+                print(`Supabaseへの接続に失敗しました: ${error.message}`, 'system');
             }
         }
         
         async function connectToBoard() {
             if (!supabaseClient) {
-                print("Supabase client not initialized.", 'system');
+                print("Supabaseクライアントが初期化されていません。", 'system');
                 return;
             }
 
             try {
                 if (isConnected) {
-                    print("You are already connected to the message board.", 'system');
+                    print("すでに掲示板に接続しています。", 'system');
                     return;
                 }
                 
-                print("Connecting to message board...", 'system');
+                print("掲示板に接続中...", 'system');
 
+                // リアルタイム購読を再有効化
                 supabaseClient
                     .channel('messages_channel')
                     .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => {
@@ -146,17 +148,17 @@
                 });
 
                 isConnected = true;
-                print("You are now connected to the message board and can post a message.", 'system');
+                print("掲示板に接続しました。メッセージを投稿できます。", 'system');
             } catch (error) {
-                print(`Failed to connect to the bulletin board: ${error.message}`, 'system');
+                print(`掲示板への接続に失敗しました: ${error.message}`, 'system');
             }
         }
 
         function displayMessage(sender, content) {
             const isMyMessage = sender === myName || sender === myId;
-            const displayName = myName || myId;
+            const displayName = sender;
             const className = isMyMessage ? 'my-message' : 'other-message';
-            const message = `[${sender}] ${content}`;
+            const message = `[${displayName}] ${content}`;
             print(message, className);
         }
         
@@ -251,7 +253,7 @@
                     if (myId === 'X79K07' || myId === 'VYIP9F') {
                         print("&nbsp;&nbsp;<b>/clear</b>      - ターミナル画面をクリアします。");
                     }
-                    print("&nbsp;&nbsp;<b>[メッセージ]</b>　　- メッセージを投稿します。");
+                    print("&nbsp;&nbsp;<b>[メッセージ]</b> - (接続時のみ) 全員にメッセージを投稿します。");
                     break;
                 
                 case '/id':
@@ -295,7 +297,7 @@
                 case '/clear':
                     const allowedIds = ['X79K07', 'VYIP9F'];
                     if (allowedIds.includes(myId)) {
-                        terminal.innerHTML = "<div>If you come to this site and don't understand anything, just send a message saying "help." Unless you're an idiot, you'll understand...</div><br>";
+                        terminal.innerHTML = "<div>ようこそ！</div><div>'/id'と入力してIDを生成、'/connect'で掲示板に接続できます。</div><div>'help'でコマンドを確認できます。</div><br>";
                         if (isConnected) {
                             connectToBoard();
                         }
