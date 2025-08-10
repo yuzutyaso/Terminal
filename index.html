@@ -5,11 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Terminal</title>
     <style>
-        /* CSS: サイトの見た目を設定します */
         body {
-            background-color: #1a1a1a; /* 少し柔らかい黒 */
-            color: #f0f0f0; /* 少し柔らかい白 */
-            font-family: 'monospace', 'Courier New', Courier; /* ターミナルらしい等幅フォント */
+            background-color: #1a1a1a;
+            color: #f0f0f0;
+            font-family: 'monospace', 'Courier New', Courier;
             font-size: 16px;
             line-height: 1.6;
             margin: 0;
@@ -18,11 +17,11 @@
 
         #terminal {
             width: 100%;
-            height: 90vh; /* 画面の高さの90% */
-            overflow-y: scroll; /* 内容が増えたらスクロールできるように */
+            height: 90vh;
+            overflow-y: scroll;
             border: 1px solid #333;
             padding: 10px;
-            box-sizing: border-box; /* paddingを含めてサイズ計算 */
+            box-sizing: border-box;
         }
 
         .line {
@@ -30,7 +29,7 @@
         }
         
         .prompt {
-            color: #8f8; /* プロンプトの色を緑に */
+            color: #8f8;
             margin-right: 8px;
         }
         
@@ -40,16 +39,15 @@
         }
 
         #command-line {
-            background-color: transparent; /* 背景を透明に */
-            border: none; /* 枠線をなくす */
-            color: #f0f0f0; /* 入力文字の色 */
-            font-family: inherit; /* 親要素のフォントを継承 */
-            font-size: inherit; /* 親要素のフォントサイズを継承 */
-            outline: none; /* クリックしたときの枠線をなくす */
+            background-color: transparent;
+            border: none;
+            color: #f0f0f0;
+            font-family: inherit;
+            font-size: inherit;
+            outline: none;
             width: 100%;
         }
 
-        /* スクロールバーのスタイル（おまけ） */
         ::-webkit-scrollbar {
             width: 8px;
         }
@@ -79,34 +77,30 @@
 
     <script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
     <script>
-        // JavaScript: サイトの動きを制御します
         const terminal = document.getElementById('terminal');
         const commandLine = document.getElementById('command-line');
         const startTime = Date.now();
 
-        // Pythonインタプリタの初期化
         let pyodide;
         async function initializePyodide() {
             print("Loading Python environment... This might take a moment.");
             pyodide = await loadPyodide();
             print("Python environment loaded. Type 'help' to see available commands.");
             
-            // requestsモジュールを事前にインストールしておく
-            print("Installing 'requests' module...");
+            print("Installing 'requests' and 'sqlite3' modules...");
             await pyodide.loadPackage("requests");
-            print("Done. You can now use `import requests` in python.");
+            await pyodide.loadPackage("sqlite3");
+            print("Done. You can now use `import sqlite3` in python.");
         }
         initializePyodide();
 
-        // メッセージを画面に表示する関数
         function print(message) {
             const newLine = document.createElement('div');
-            newLine.innerHTML = message; // innerHTMLを使うとHTMLタグも解釈される
+            newLine.innerHTML = message;
             terminal.appendChild(newLine);
-            terminal.scrollTop = terminal.scrollHeight; // 自動で一番下までスクロール
+            terminal.scrollTop = terminal.scrollHeight;
         }
 
-        // Enterキーが押されたときの処理
         commandLine.addEventListener('keydown', async function(event) {
             if (event.key === 'Enter') {
                 const command = commandLine.value.trim();
@@ -121,7 +115,6 @@
             }
         });
 
-        // コマンドを処理する関数 (asyncに変更)
         async function handleCommand(command) {
             const parts = command.split(' ');
             const mainCommand = parts[0].toLowerCase();
@@ -242,7 +235,6 @@
                     const pythonCode = args.join(' ');
                     if (pyodide) {
                         try {
-                            // Pythonの出力を捕捉して表示
                             let output = "";
                             pyodide.setStdout({
                                 isatty: true,
@@ -315,7 +307,6 @@
             }
         }
         
-        // ページ上のどこかをクリックしたときに入力欄にフォーカスを当てる
         document.body.addEventListener('click', function() {
             commandLine.focus();
         });
