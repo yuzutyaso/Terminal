@@ -108,25 +108,25 @@
             try {
                 const { createClient } = supabase;
                 supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-                print("Supabaseクライアントを初期化しました。", 'system');
+                print("I have initialized the Supabase client.", 'system');
             } catch (error) {
-                print(`Supabaseへの接続に失敗しました: ${error.message}`, 'system');
+                print(`Failed to connect to Supabase: ${error.message}`, 'system');
             }
         }
         
         async function connectToBoard() {
             if (!supabaseClient) {
-                print("Supabaseクライアントが初期化されていません。", 'system');
+                print("Supabase client not initialized.", 'system');
                 return;
             }
 
             try {
                 if (isConnected) {
-                    print("すでに掲示板に接続しています。", 'system');
+                    print("You are already connected to the message board.", 'system');
                     return;
                 }
                 
-                print("掲示板に接続中...", 'system');
+                print("Connecting to message board...", 'system');
 
                 supabaseClient
                     .channel('messages_channel')
@@ -146,9 +146,9 @@
                 });
 
                 isConnected = true;
-                print("掲示板に接続しました。メッセージを投稿できます。", 'system');
+                print("You are now connected to the message board and can post a message.", 'system');
             } catch (error) {
-                print(`掲示板への接続に失敗しました: ${error.message}`, 'system');
+                print(`Failed to connect to the bulletin board: ${error.message}`, 'system');
             }
         }
 
