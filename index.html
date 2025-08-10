@@ -83,6 +83,8 @@
         const startTime = Date.now();
 
         let pyodide;
+        let dbConnection;
+
         async function initializePyodide() {
             print("Loading Python environment... This might take a moment.");
             pyodide = await loadPyodide();
@@ -92,8 +94,31 @@
             await pyodide.loadPackage("sqlite3");
             await pyodide.loadPackage("requests");
             print("Done. You can now use `import sqlite3` and `import requests` in python.");
+            
+            // SQLiteデータベースの初期化
+            print("Initializing database...");
+            await initializeDB();
+            print("Database ready.");
         }
-        initializePyodide();
+
+        async function initializeDB() {
+            // Pythonコードを実行してDB接続とテーブル作成
+            await pyodide.runPythonAsync(`
+                import sqlite3
+                conn = sqlite3.connect('my_terminal.db')
+                c = conn.cursor()
+                c.execute('''
+                    CREATE TABLE IF NOT EXISTS messages (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        sender TEXT,
+                        content TEXT,
+                        timestamp TEXT
+                    )
+                ''')
+                conn.commit()
+                conn.close()
+            `);
+        }
 
         function print(message) {
             const newLine = document.createElement('div');
@@ -122,147 +147,101 @@
             const args = parts.slice(1);
             const fullCommand = command;
 
+            // Pythonコマンドの処理
+            if (fullCommand.startsWith('python ')) {
+                const pythonCode = fullCommand.substring(7);
+                if (pyodide) {
+                    try {
+                        let output = "";
+                        pyodide.setStdout({
+                            isatty: true,
+                            write: (buf) => {
+                                const str = new TextDecoder("utf-8").decode(buf);
+                                output += str;
+                            },
+                            flush: () => {
+                                print(output);
+                                output = "";
+                            }
+                        });
+                        const result = await pyodide.runPythonAsync(pythonCode);
+                        if (result !== undefined) {
+                            print(result);
+                        }
+                    } catch (e) {
+                        print(`<span style="color: red;">Python Error: ${e}</span>`);
+                    }
+                } else {
+                    print("Python environment is still loading. Please wait...");
+                }
+                return;
+            }
+
+            // IPアドレスで始まる通信コマンドの処理
+            if (mainCommand.startsWith('/')) {
+                const targetIp = mainCommand.substring(1);
+                const message = args.join(' ');
+                
+                if (targetIp === 'ip') {
+                    // 自分のIPアドレスを取得するシミュレーション
+                    print("Fetching your IP address...");
+                    try {
+                        const response = await fetch('https://api.ipify.org?format=json');
+                        const data = await response.json();
+                        print(`Your IP address is: ${data.ip}`);
+                    } catch (e) {
+                        print(`<span style="color: red;">Error fetching IP: Could not connect to the service.</span>`);
+                    }
+                } else {
+                    // 相手にメッセージを送信するシミュレーション
+                    if (message) {
+                        print(`Sending message to ${targetIp}: "${message}"`);
+                        
+                        // データベースにメッセージを保存
+                        const pythonCode = `
+                            import sqlite3, datetime
+                            conn = sqlite3.connect('my_terminal.db')
+                            c = conn.cursor()
+                            c.execute("INSERT INTO messages VALUES (NULL, ?, ?, ?)", ('Me', '${message}', str(datetime.datetime.now())))
+                            conn.commit()
+                            conn.close()
+                        `;
+                        await pyodide.runPythonAsync(pythonCode);
+                        print("Message sent and saved to DB.");
+                    } else {
+                        print("Usage: /[target_ip] [message]");
+                    }
+                }
+                return;
+            }
+
             switch (mainCommand) {
                 case 'help':
                     print("Available commands:");
                     print("&nbsp;&nbsp;<b>about</b>    - Shows information about this site.");
-                    print("&nbsp;&nbsp;<b>contact</b>  - Shows contact information.");
                     print("&nbsp;&nbsp;<b>clear</b>    - Clears the terminal screen.");
-                    print("&nbsp;&nbsp;<b>date</b>     - Shows the current date and time.");
                     print("&nbsp;&nbsp;<b>ls</b>       - Lists files in the current directory.");
-                    print("&nbsp;&nbsp;<b>pwd</b>      - Prints the working directory.");
-                    print("&nbsp;&nbsp;<b>cat</b> [file] - Displays the content of a file. (e.g., 'cat readme.txt')");
-                    print("&nbsp;&nbsp;<b>whoami</b>   - Shows the current user.");
-                    print("&nbsp;&nbsp;<b>uptime</b>   - Shows how long the system has been running.");
-                    print("&nbsp;&nbsp;<b>echo</b> [text] - Repeats the given text.");
-                    print("&nbsp;&nbsp;<b>fortune</b>  - Displays a random quote or joke.");
-                    print("&nbsp;&nbsp;<b>js</b> [code]    - Executes JavaScript code. (e.g., 'js 2 * 10')");
-                    print("&nbsp;&nbsp;<b>python</b> [code]- Executes Python code. (e.g., 'python print(2 * 10)')");
-                    print("&nbsp;&nbsp;<b>pip</b> [package]- Installs a Python package. (e.g., 'pip numpy')");
+                    print("&nbsp;&nbsp;<b>upload</b>   - Uploads a file to the virtual filesystem.");
                     print("&nbsp;&nbsp;<b>pip -r</b> [file] - Installs packages from a requirements file. (e.g., 'pip -r requirements.txt')");
-                    print("&nbsp;&nbsp;<b>upload</b>    - Uploads a file to the terminal's virtual filesystem.");
+                    print("&nbsp;&nbsp;<b>/ip</b>      - Shows your IP address. (Simulated)");
+                    print("&nbsp;&nbsp;<b>/[ip]</b> [message] - Sends a message to another IP. (Simulated)");
+                    print("&nbsp;&nbsp;<b>cat</b> [file] - Displays the content of a file. (e.g., 'cat readme.txt')");
+                    print("&nbsp;&nbsp;<b>sql</b> [query] - Executes a SQL query on the internal database.");
                     print("<br>");
                     print("<b>Dangerous Commands (Simulated):</b>");
                     print("&nbsp;&nbsp;<b>rm -rf /</b>   - <b>(DANGER)</b> Simulates a system wipe.");
-                    print("&nbsp;&nbsp;<b>sudo reboot</b>  - <b>(DANGER)</b> Simulates a system reboot.");
-                    print("&nbsp;&nbsp;<b>dd</b>       - <b>(DANGER)</b> Simulates overwriting a disk.");
                     break;
                 
                 case 'about':
-                    print("This is a simple terminal-style website created with HTML, CSS, and JavaScript.");
-                    break;
-
-                case 'contact':
-                    print("You can find me on...<br>&nbsp;&nbsp;GitHub: my-github-account<br>&nbsp;&nbsp;Twitter: my-twitter-handle");
+                    print("This is a simple terminal-style website created with HTML, CSS, and JavaScript, with added Python and SQL capabilities.");
                     break;
 
                 case 'clear':
                     terminal.innerHTML = "<div>Welcome to My Terminal!</div><div>Type 'help' to see available commands.</div><br>";
                     break;
 
-                case 'date':
-                    print(new Date().toString());
-                    break;
-                
                 case 'ls':
-                    print("README.md&nbsp;&nbsp;&nbsp;&nbsp;about.txt&nbsp;&nbsp;&nbsp;&nbsp;contact.txt&nbsp;&nbsp;&nbsp;&nbsp;index.html");
-                    break;
-
-                case 'pwd':
-                    print("/home/guest");
-                    break;
-                    
-                case 'cat':
-                    const filename = args[0];
-                    if (!filename) {
-                        print("Usage: cat [filename]");
-                        break;
-                    }
-                    const files = {
-                        "readme.txt": "Welcome to my terminal! This is a fake file content. Use 'help' for more commands.",
-                        "about.txt": "This terminal was built by a developer who loves the command line.",
-                        "contact.txt": "Email: fake@example.com"
-                    };
-                    
-                    if (files[filename]) {
-                        print(files[filename]);
-                    } else {
-                        print(`cat: ${filename}: No such file or directory`);
-                    }
-                    break;
-
-                case 'whoami':
-                    print("guest");
-                    break;
-
-                case 'uptime':
-                    const uptimeInSeconds = Math.floor((Date.now() - startTime) / 1000);
-                    const hours = Math.floor(uptimeInSeconds / 3600);
-                    const minutes = Math.floor((uptimeInSeconds % 3600) / 60);
-                    const seconds = uptimeInSeconds % 60;
-                    print(`up ${hours} hours, ${minutes} minutes, ${seconds} seconds`);
-                    break;
-
-                case 'echo':
-                    if (args.length > 0) {
-                        print(args.join(' '));
-                    }
-                    break;
-                
-                case 'fortune':
-                    const fortunes = [
-                        "The early bird gets the worm, but the second mouse gets the cheese.",
-                        "A computer's ability to be a useful tool is proportional to its ability to be a fun toy.",
-                        "You can't have everything. Where would you put it?",
-                        "An optimist thinks this is the best of all possible worlds. A pessimist fears it is true.",
-                        "Don't worry about the world ending today. It's already tomorrow in Australia."
-                    ];
-                    const randomIndex = Math.floor(Math.random() * fortunes.length);
-                    print(fortunes[randomIndex]);
-                    break;
-
-                case 'js':
-                    const jsCode = args.join(' ');
-                    if (jsCode) {
-                        try {
-                            const result = eval(jsCode);
-                            print(result);
-                        } catch (e) {
-                            print(`<span style="color: red;">Error: ${e.message}</span>`);
-                        }
-                    } else {
-                        print("Usage: js [your JavaScript code]");
-                    }
-                    break;
-
-                case 'python':
-                    const pythonCode = args.join(' ');
-                    if (pyodide) {
-                        try {
-                            let output = "";
-                            pyodide.setStdout({
-                                isatty: true,
-                                write: (buf) => {
-                                    const str = new TextDecoder("utf-8").decode(buf);
-                                    output += str;
-                                },
-                                flush: () => {
-                                    print(output);
-                                    output = "";
-                                }
-                            });
-                            
-                            const result = pyodide.runPython(pythonCode);
-                            
-                            if (result !== undefined) {
-                                print(result);
-                            }
-                        } catch (e) {
-                            print(`<span style="color: red;">Python Error: ${e}</span>`);
-                        }
-                    } else {
-                        print("Python environment is still loading. Please wait...");
-                    }
+                    print("README.md&nbsp;&nbsp;&nbsp;&nbsp;my_terminal.db&nbsp;&nbsp;&nbsp;&nbsp;index.html");
                     break;
 
                 case 'upload':
@@ -310,18 +289,7 @@
                                 print("Usage: pip -r [filename]");
                             }
                         } else {
-                            const packageName = pipArgs;
-                            if (packageName) {
-                                print(`Installing package: ${packageName}...`);
-                                try {
-                                    await pyodide.loadPackage(packageName);
-                                    print(`Successfully installed ${packageName}.`);
-                                } catch (e) {
-                                    print(`<span style="color: red;">Error installing package: ${e}</span>`);
-                                }
-                            } else {
-                                print("Usage: pip [package_name] or pip -r [filename]");
-                            }
+                            print("Usage: pip -r [filename]");
                         }
                     } else {
                         print("Python environment is still loading. Please wait...");
@@ -339,31 +307,33 @@
                         print("rm: cannot remove file: Is a directory (simulated)");
                     }
                     break;
-
-                case 'sudo':
-                    if (args[0] === 'reboot') {
-                        print("Broadcast message from systemd-journald@host (Sun 2025-08-10 11:44:26 JST):");
-                        print("<br>");
-                        print("The system is going down for reboot NOW!");
-                        print("<br>");
-                        print("...System is back online. Welcome back.");
-                    } else {
-                        print("sudo: unknown command");
+                
+                case 'sql':
+                    const query = args.join(' ');
+                    if (!query) {
+                        print("Usage: sql [query]");
+                        return;
                     }
-                    break;
-                    
-                case 'dd':
-                    if (args.join(' ') === 'if=/dev/zero of=/dev/sda') {
-                        print("<span style='color: red;'>DANGER!</span> This command will completely erase your hard drive.");
-                        print("Simulating disk wipe...");
-                        print("128+0 records in");
-                        print("128+0 records out");
-                        print("65536 bytes transferred in 0.000100 secs (655360000 bytes/sec)");
-                        print("<br>");
-                        print("...Your files are still here, don't worry.");
-                    } else {
-                        print("dd: missing operand after 'dd'");
-                    }
+                    const pythonSqlCode = `
+                        import sqlite3
+                        conn = sqlite3.connect('my_terminal.db')
+                        c = conn.cursor()
+                        try:
+                            c.execute("${query}")
+                            conn.commit()
+                            results = c.fetchall()
+                            if results:
+                                print("Query results:")
+                                for row in results:
+                                    print(row)
+                            else:
+                                print("Query executed successfully.")
+                        except sqlite3.OperationalError as e:
+                            print(f"SQL Error: {e}")
+                        finally:
+                            conn.close()
+                    `;
+                    await pyodide.runPythonAsync(pythonSqlCode);
                     break;
 
                 default:
@@ -378,6 +348,7 @@
             commandLine.focus();
         });
 
+        initializePyodide();
     </script>
 </body>
 </html>
