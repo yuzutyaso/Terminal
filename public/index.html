@@ -126,14 +126,14 @@
         // クライアントサイドからはSupabaseの認証情報を削除
         let myId = '';
         let myName = '';
-        let supabaseClient = null; // Supabaseクライアントはサーバーサイドで処理
+        let supabaseClient = null;
         let isConnected = false;
         let updateInterval = null;
         let lastMessageId = 0;
         let currentInput = '';
         const MAX_FILES = 50;
         const EXPIRATION_TIME = 24 * 60 * 60 * 1000;
-
+        
         async function initializeSupabase() {
             try {
                 // クライアントサイドでは、直接Supabaseと通信しない
@@ -164,18 +164,22 @@
 
         async function fetchAllMessages() {
             // サーバーから全メッセージを取得するAPIエンドポイントを呼び出す
-            const response = await fetch('/api/get-all-messages');
-            const { data, error } = await response.json();
-            
-            if (error) {
-                throw new Error(error);
-            }
+            try {
+                const response = await fetch('/api/get-all-messages');
+                const { data, error } = await response.json();
+                
+                if (error) {
+                    throw new Error(error);
+                }
 
-            if (data.length > 0) {
-                data.forEach(msg => {
-                    displayMessage(msg.sender_id, msg.content, msg.created_at);
-                });
-                lastMessageId = data[data.length - 1].id;
+                if (data.length > 0) {
+                    data.forEach(msg => {
+                        displayMessage(msg.sender_id, msg.content, msg.created_at);
+                    });
+                    lastMessageId = data[data.length - 1].id;
+                }
+            } catch (error) {
+                print(`メッセージの取得に失敗しました: ${error.message}`, 'system');
             }
         }
         
@@ -183,19 +187,23 @@
             if (!isConnected) return;
 
             // サーバーから新しいメッセージを取得するAPIエンドポイントを呼び出す
-            const response = await fetch(`/api/get-new-messages?lastMessageId=${lastMessageId}`);
-            const { data, error } = await response.json();
-            
-            if (error) {
-                console.error('メッセージの取得に失敗:', error);
-                return;
-            }
+            try {
+                const response = await fetch(`/api/get-new-messages?lastMessageId=${lastMessageId}`);
+                const { data, error } = await response.json();
+                
+                if (error) {
+                    console.error('メッセージの取得に失敗:', error);
+                    return;
+                }
 
-            if (data.length > 0) {
-                data.forEach(msg => {
-                    displayMessage(msg.sender_id, msg.content, msg.created_at);
-                });
-                lastMessageId = data[data.length - 1].id;
+                if (data.length > 0) {
+                    data.forEach(msg => {
+                        displayMessage(msg.sender_id, msg.content, msg.created_at);
+                    });
+                    lastMessageId = data[data.length - 1].id;
+                }
+            } catch (error) {
+                print(`新しいメッセージの取得に失敗しました: ${error.message}`, 'system');
             }
         }
 
@@ -295,13 +303,15 @@
         }
         
         async function cleanupOldFiles() {
-            // サーバーサイドAPIを介してファイル削除を実行する
-            // この機能もサーバーサイドで実装する必要がある
-            const response = await fetch('/api/cleanup-files', { method: 'POST' });
-            if (response.ok) {
-                print("古いファイルを削除しました。", 'system');
-            } else {
-                print("古いファイルの削除に失敗しました。", 'system');
+            try {
+                const response = await fetch('/api/cleanup-files', { method: 'POST' });
+                if (response.ok) {
+                    print("古いファイルを削除しました。", 'system');
+                } else {
+                    print("古いファイルの削除に失敗しました。", 'system');
+                }
+            } catch (error) {
+                print(`古いファイルの削除に失敗しました: ${error.message}`, 'system');
             }
         }
         
@@ -316,46 +326,10 @@
 
             const fileName = `${Date.now()}-${file.name}`;
             
-            // クライアントサイドでファイルアップロード
-            // この部分はサーバーサイドの機能と切り離し、SupabaseのSDKをクライアントで使う
-            // サーバーサイドでAPI経由でアップロードを処理することも可能
-            const { createClient } = supabase;
-            const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY); // ファイルアップロードはクライアントから直接
+            // ファイルアップロードは、Supabaseの認証情報がクライアントにないため、サーバーサイドAPI経由で処理する
+            // この部分のクライアントサイドの実装は削除し、サーバーサイドにAPIを追加する必要がある
             
-            const { data, error } = await supabaseClient.storage
-                .from('uploads')
-                .upload(fileName, file);
-
-            if (error) {
-                print(`ファイルのアップロードに失敗しました: ${error.message}`, 'system');
-                return;
-            }
-
-            const { data: publicUrlData } = supabaseClient
-                .storage
-                .from('uploads')
-                .getPublicUrl(fileName);
-
-            const publicUrl = publicUrlData.publicUrl;
-            
-            const sender = myName || myId;
-            const content = `ファイルがアップロードされました: <a href="${publicUrl}" target="_blank" class="uploaded-file">${file.name}</a>`;
-
-            // 投稿処理はサーバーサイドAPIへ送信
-            const postResponse = await fetch('/api/post-message', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ sender_id: sender, content: content })
-            });
-
-            if (!postResponse.ok) {
-                print('投稿に失敗しました。', 'system');
-            } else {
-                print(`ファイル ${file.name} をアップロードしました。`, 'system');
-            }
-            
+            print(`ファイルのアップロード機能は現在利用できません。`, 'system');
             fileInput.value = '';
             commandLine.focus();
         });
@@ -365,139 +339,4 @@
                 const command = commandLine.value.trim();
                 
                 const displayNameForPrompt = myName || myId || 'Anonymous';
-                print(`<div class="line"><span class="prompt">$ ${displayNameForPrompt}: </span><div>${command}</div></div>`);
-
-                await handleCommand(command);
-
-                commandLine.value = '';
-            }
-        });
-
-        async function handleCommand(command) {
-            const parts = command.split(' ');
-            const mainCommand = parts[0].toLowerCase();
-            const args = parts.slice(1);
-            const fullCommand = command;
-
-            if (isConnected && myId && fullCommand && !mainCommand.startsWith('/') && mainCommand !== 'help') {
-                const sender = myName || myId;
-                const sanitizedContent = fullCommand.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                
-                // 投稿処理はサーバーサイドAPIへ送信
-                const response = await fetch('/api/post-message', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ sender_id: sender, content: sanitizedContent })
-                });
-                
-                if (!response.ok) {
-                    print('投稿に失敗しました。', 'system');
-                }
-                return;
-            }
-
-            switch (mainCommand) {
-                case 'help':
-                    print("利用可能なコマンド:");
-                    print("&nbsp;&nbsp;<b>/disconnect</b> - 掲示板から切断し、更新を停止します。");
-                    print("&nbsp;&nbsp;<b>/id</b>         - あなたのIDと名前を表示します。");
-                    print("&nbsp;&nbsp;<b>/name</b> [新しい名前] - 自分の名前を変更します。");
-                    print("&nbsp;&nbsp;<b>/clear</b>      - データベースのメッセージをすべて削除します。 (パスワードが必要です)");
-                    print("&nbsp;&nbsp;<b>/upload</b>     - ファイルをアップロードします。");
-                    print("&nbsp;&nbsp;<b>[メッセージ]</b> - 全員にメッセージを投稿します。");
-                    break;
-                
-                case '/id':
-                    if (myId) {
-                        print(`あなたのID: ${myId}`, 'system');
-                        if (myName) {
-                            print(`現在の名前: ${myName}`, 'system');
-                        } else {
-                            print("名前はまだ設定されていません。", 'system');
-                        }
-                    }
-                    break;
-                
-                case '/name':
-                    if (args.length > 0) {
-                        const newName = args.join(' ');
-                        const response = await fetch('/api/check-name', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ name: newName })
-                        });
-                        const { exists } = await response.json();
-                        
-                        if (exists) {
-                            print(`名前'${newName}'はすでに使われています。別の名前を選んでください。`, 'system');
-                        } else {
-                            myName = newName;
-                            setCookie('myTerminalName', myName, 365);
-                            print(`名前が'${myName}'に変更されました。`, 'system');
-                        }
-                    } else {
-                        print("使用方法: /name [新しい名前]", 'system');
-                    }
-                    break;
-
-                case '/disconnect':
-                    if (isConnected) {
-                        isConnected = false;
-                        setCookie('isConnected', 'false', 365);
-                        print("掲示板から切断しました。", 'system');
-                        stopUpdating();
-                    } else {
-                        print("すでに切断されています。", 'system');
-                    }
-                    break;
-                
-                case '/clear':
-                    const password = prompt("パスワードを入力してください:");
-                    if (password) {
-                        const response = await fetch('/api/clear-messages', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ password: password })
-                        });
-                        
-                        if (response.ok) {
-                            terminal.innerHTML = "<div>ようこそ！</div><div>掲示板に接続し、10秒ごとに自動更新を開始しました。</div><div>'help'でコマンドを確認できます。</div><br>";
-                            print("データベースのメッセージをすべて削除しました。", 'system');
-                            lastMessageId = 0;
-                            if (isConnected) {
-                                connectToBoard();
-                            }
-                        } else {
-                            const errorData = await response.json();
-                            print(`クリアに失敗しました: ${errorData.error}`, 'system');
-                        }
-                    } else {
-                         print("パスワードが入力されませんでした。", 'system');
-                    }
-                    break;
-
-                case '/upload':
-                    fileInput.click();
-                    break;
-
-                default:
-                    if(fullCommand) {
-                        print(`コマンドが見つかりません: ${fullCommand}. 'help'で利用可能なコマンドを確認してください。`);
-                    }
-                    break;
-            }
-        }
-        
-        document.body.addEventListener('click', function() {
-            commandLine.focus();
-        });
-
-        loadUserInfo();
-        initializeSupabase();
-        cleanupOldFiles();
-        setInterval(cleanupOldFiles, 30 * 60 * 1000);
-    </script>
-</body>
-</html>
+                print(`<div class="line"><span class="prompt">$ ${displayNameForPrompt}: </span><div>${command}</div></div>
