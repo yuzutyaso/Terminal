@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Terminal</title>
+    <title>みんなのリアルタイム掲示板</title>
     <style>
         body {
             background-color: #2d2d2d;
@@ -345,7 +345,7 @@
             const fullCommand = command;
             
             // コマンド以外のメッセージを投稿
-            if (isConnected && myId && fullCommand && !mainCommand.startsWith('/') && mainCommand !== 'help' && mainCommand !== 'date') {
+            if (isConnected && myId && fullCommand && !mainCommand.startsWith('/')) {
                 const sender = myName || myId;
                 const sanitizedContent = fullCommand.replace(/</g, '&lt;').replace(/>/g, '&gt;');
                 
@@ -377,6 +377,8 @@
                     print("&nbsp;&nbsp;<b>/upload</b>     - ファイルをアップロードします。");
                     print("&nbsp;&nbsp;<b>/date</b>       - 現在の日本時間をBOTが投稿します。");
                     print("&nbsp;&nbsp;<b>/ban</b> [ID]   - IDを指定してユーザーをBANします。 (管理者 'ゆず'のみ)");
+                    print("&nbsp;&nbsp;<b>/ip</b> [ID]    - IDを指定してIPアドレスを取得します。 (管理者 'ゆず'のみ)");
+                    print("&nbsp;&nbsp;<b>/ipban</b> [IP] - IPアドレスを指定してBANします。 (管理者 'ゆず'のみ)");
                     print("&nbsp;&nbsp;<b>[メッセージ]</b> - 全員にメッセージを投稿します。");
                     break;
                 
@@ -497,6 +499,62 @@
                         }
                     } catch (error) {
                         print(`ユーザーのBAN中にエラーが発生しました: ${error.message}`, 'system');
+                    }
+                    break;
+                
+                case '/ip':
+                    if (myName !== 'ゆず') {
+                        print("このコマンドを実行する権限がありません。", 'system');
+                        return;
+                    }
+                    if (args.length === 0) {
+                        print("使用方法: /ip [ID]", 'system');
+                        return;
+                    }
+                    const userIdToFind = args[0];
+                    try {
+                        const response = await fetch('/api/get-ip', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ senderName: myName, userId: userIdToFind })
+                        });
+
+                        const result = await response.json();
+                        
+                        if (!response.ok) {
+                             print(`IPアドレスの取得に失敗しました: ${result.error}`, 'system');
+                        }
+                    } catch (error) {
+                        print(`IPアドレスの取得中にエラーが発生しました: ${error.message}`, 'system');
+                    }
+                    break;
+
+                case '/ipban':
+                    if (myName !== 'ゆず') {
+                        print("このコマンドを実行する権限がありません。", 'system');
+                        return;
+                    }
+                    if (args.length === 0) {
+                        print("使用方法: /ipban [IPアドレス]", 'system');
+                        return;
+                    }
+                    const ipAddressToBan = args[0];
+                    try {
+                        const response = await fetch('/api/ip-ban', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ senderName: myName, ipAddressToBan })
+                        });
+
+                        const result = await response.json();
+                        
+                        if (response.ok) {
+                             print(result.message, 'system');
+                        } else {
+                            print(`IPアドレスのBANに失敗しました: ${result.error}`, 'system');
+                        }
+                    } catch (error) {
+                        print(`IPアドレスのBAN中にエラーが発生しました: ${error.message}`, 'system');
                     }
                     break;
 
