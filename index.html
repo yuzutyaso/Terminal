@@ -135,7 +135,8 @@
         let updateInterval = null;
         let lastMessageId = 0;
         let currentInput = '';
-        const allowedUploaderId = 'DE39D5';
+        const MAX_FILES = 50;
+        const EXPIRATION_TIME = 24 * 60 * 60 * 1000; // 24時間
 
         async function initializeSupabase() {
             try {
@@ -305,12 +306,50 @@
             }
         }
         
+        async function cleanupOldFiles() {
+            const { data: files, error } = await supabaseClient.storage.from('uploads').list();
+            if (error) {
+                console.error('ファイルリストの取得に失敗:', error);
+                return;
+            }
+
+            const now = new Date();
+            const toDelete = [];
+
+            if (files.length >= MAX_FILES) {
+                print(`ファイル数が上限(${MAX_FILES}個)を超えました。すべてのファイルを削除します。`, 'system');
+                files.forEach(file => {
+                    if (file.name !== '.emptyFolderPlaceholder') {
+                        toDelete.push(file.name);
+                    }
+                });
+            } else {
+                files.forEach(file => {
+                    const fileTime = new Date(file.created_at);
+                    if ((now - fileTime) > EXPIRATION_TIME && file.name !== '.emptyFolderPlaceholder') {
+                        toDelete.push(file.name);
+                    }
+                });
+            }
+
+            if (toDelete.length > 0) {
+                const { error: deleteError } = await supabaseClient.storage.from('uploads').remove(toDelete);
+                if (deleteError) {
+                    print(`ファイルの削除に失敗しました: ${deleteError.message}`, 'system');
+                } else {
+                    print(`${toDelete.length}個のファイルを削除しました。`, 'system');
+                }
+            }
+        }
+        
         fileInput.addEventListener('change', async function(event) {
             const file = event.target.files[0];
             if (!file) {
                 print("ファイルが選択されませんでした。", 'system');
                 return;
             }
+            
+            await cleanupOldFiles(); // 新規アップロード前にクリーンアップを実行
 
             const fileName = `${Date.now()}-${file.name}`;
             const { data, error } = await supabaseClient.storage
@@ -384,7 +423,7 @@
                     print("&nbsp;&nbsp;<b>/id</b>         - あなたのIDと名前を表示します。");
                     print("&nbsp;&nbsp;<b>/name</b> [新しい名前] - 自分の名前を変更します。");
                     print("&nbsp;&nbsp;<b>/clear</b>      - データベースのメッセージをすべて削除します。 (パスワードが必要です)");
-                    print("&nbsp;&nbsp;<b>/upload</b>     - ファイルをアップロードします。 (ID:DE39D5のみ)");
+                    print("&nbsp;&nbsp;<b>/upload</b>     - ファイルをアップロードします。");
                     print("&nbsp;&nbsp;<b>[メッセージ]</b> - 全員にメッセージを投稿します。");
                     break;
                 
@@ -463,10 +502,6 @@
                     break;
 
                 case '/upload':
-                    if (myId !== allowedUploaderId) {
-                        print("このコマンドを実行する権限がありません。", 'system');
-                        return;
-                    }
                     fileInput.click();
                     break;
 
@@ -484,6 +519,8 @@
 
         loadUserInfo();
         initializeSupabase();
+        cleanupOldFiles();
+        setInterval(cleanupOldFiles, 30 * 60 * 1000); // 30分ごとに定期的にクリーンアップを実行
     </script>
 </body>
 </html>
