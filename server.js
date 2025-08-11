@@ -18,6 +18,7 @@ app.use(bodyParser.json());
 
 app.use(express.static('public'));
 
+// 投稿用APIルート
 app.post('/api/post-message', async (req, res) => {
     const { sender_id, content } = req.body;
 
@@ -37,6 +38,5 @@ app.post('/api/post-message', async (req, res) => {
     res.status(200).json({ message: 'Message posted successfully' });
 });
 
-app.listen(port, () => {
-    console.log(`Server listening on port ${port}`);
-});
+// Vercelで動作するように、app.listen()を削除し、代わりにappをエクスポートする
+module.exports = app;
