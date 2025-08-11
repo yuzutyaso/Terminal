@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Terminal</title>
+    <title>みんなのリアルタイム掲示板</title>
     <style>
         body {
             background-color: #2d2d2d;
@@ -104,7 +104,6 @@
         <div id="terminal-view">
             <div id="terminal">
                 <div>ようこそ！</div>
-                <div>掲示板に接続し、10秒ごとに自動更新を開始しました。</div>
                 <div>'help'でコマンドを確認できます。</div>
                 <br>
             </div>
@@ -144,7 +143,6 @@
                 const { createClient } = supabase;
                 supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
                 print("Supabaseクライアントを初期化しました。", 'system');
-                await connectToBoard();
             } catch (error) {
                 print(`Supabaseへの接続に失敗しました: ${error.message}`, 'system');
             }
@@ -234,9 +232,9 @@
             return `${hours}:${minutes}:${seconds}`;
         }
         
-        function displayMessage(sender, myId, content, timestamp = null) {
-            const isMyMessage = myId === myId;
-            const displayName = myName ? `${sender}(${myId})` : myId;
+        function displayMessage(sender, id, content, timestamp = null) {
+            const isMyMessage = id === myId;
+            const displayName = `${sender}(${id})`;
             const className = isMyMessage ? 'my-message' : 'other-message';
             
             let messageHtml = `[${displayName}] ${content}`;
@@ -547,8 +545,11 @@
                                     throw deleteError;
                                 }
                                 
-                                terminal.innerHTML = "<div>ようこそ！</div><div>掲示板に接続し、10秒ごとに自動更新を開始しました。</div><div>'help'でコマンドを確認できます。</div><br>";
+                                terminal.innerHTML = "<div>ようこそ！</div><div>'help'でコマンドを確認できます。</div><br>";
                                 print("データベースのメッセージをすべて削除しました。", 'system');
                                 
                                 if (isConnected) {
- 
+                                    connectToBoard();
+                                }
+                            } else {
+                             
