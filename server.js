@@ -12,10 +12,9 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
-// ★ 環境変数が設定されていない場合は、エラーを投げるのではなく、アプリケーションが起動しないようにする ★
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_KEY) {
     console.error('環境変数が設定されていません。VercelのダッシュボードでSUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_KEYを設定してください。');
-    process.exit(1); // 環境変数がなければプロセスを終了
+    process.exit(1);
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -26,11 +25,14 @@ app.use(bodyParser.json());
 
 app.use(express.static('public'));
 
-// multerの一時保存先ディレクトリを作成
-const UPLOAD_DIR = 'uploads/';
-fs.mkdir(UPLOAD_DIR, { recursive: true }).catch(console.error);
-
+const UPLOAD_DIR = '/tmp/uploads/';
 const upload = multer({ dest: UPLOAD_DIR });
+
+fs.mkdir(UPLOAD_DIR, { recursive: true }).catch(err => {
+    if (err.code !== 'EEXIST') {
+        console.error('Failed to create upload directory:', err);
+    }
+});
 
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -181,13 +183,11 @@ app.post('/api/cleanup-files', async (req, res) => {
 
 // ファイルアップロード用のAPI
 app.post('/api/upload-file', upload.single('file'), async (req, res) => {
-    // ★ try...catch で全体を囲み、処理の失敗を確実にハンドリングする ★
     try {
         const { senderId, senderName } = req.body;
         const file = req.file;
 
         if (!file || !senderId) {
-            // ★ ファイルが選択されていない場合に一時ファイルを削除する ★
             if (file) {
                 await fs.unlink(file.path).catch(err => console.error('Failed to unlink file:', err));
             }
@@ -209,7 +209,6 @@ app.post('/api/upload-file', upload.single('file'), async (req, res) => {
                 contentType: file.mimetype,
             });
 
-        // ★ 一時ファイルの削除を確実に行う ★
         await fs.unlink(file.path).catch(err => console.error('Failed to unlink file:', err));
 
         if (uploadError) {
@@ -226,7 +225,6 @@ app.post('/api/upload-file', upload.single('file'), async (req, res) => {
         const finalContent = `ファイルがアップロードされました: <a href="${publicUrl}" target="_blank" class="uploaded-file">${file.originalname}</a>`;
 
         if (finalContent.length > 100) {
-             // 長すぎる場合はアップロードしたファイルを削除
              await supabaseAdmin.storage.from('uploads').remove([fileName]).catch(err => console.error('Failed to remove uploaded file:', err));
              return res.status(400).json({ error: 'ファイル名が長すぎるため、メッセージが100文字を超えます。' });
         }
@@ -235,7 +233,6 @@ app.post('/api/upload-file', upload.single('file'), async (req, res) => {
 
         if (insertError) {
             console.error('Supabase DB insert error:', insertError);
-            // ★ データベースへの投稿が失敗した場合、アップロードしたファイルを削除してクリーンアップする ★
             await supabaseAdmin.storage.from('uploads').remove([fileName]).catch(err => console.error('Failed to remove uploaded file:', err));
             return res.status(500).json({ error: 'Failed to post message to database.' });
         }
