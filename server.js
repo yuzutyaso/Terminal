@@ -239,4 +239,25 @@ app.post('/api/upload-file', upload.single('file'), async (req, res) => {
     }
 });
 
+// 時刻をBOTが投稿するAPI
+app.post('/api/get-time', async (req, res) => {
+    try {
+        const now = new Date();
+        const jstDate = now.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short' });
+        const jstTime = now.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+        const content = `現在の日本時間は ${jstDate} ${jstTime} です。`;
+
+        const { error } = await supabase.from('messages').insert([{ sender_id: 'BOT', content }]);
+        if (error) {
+            console.error('Supabase DB insert error:', error);
+            return res.status(500).json({ error: 'Failed to post message to database.' });
+        }
+        res.status(200).json({ message: 'Time message posted successfully' });
+    } catch (err) {
+        console.error('Server error in /api/get-time:', err);
+        res.status(500).json({ error: 'サーバーエラー' });
+    }
+});
+
+
 module.exports = app;
