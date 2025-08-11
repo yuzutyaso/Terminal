@@ -343,7 +343,8 @@
             const mainCommand = parts[0].toLowerCase();
             const args = parts.slice(1);
             const fullCommand = command;
-
+            
+            // コマンド以外のメッセージを投稿
             if (isConnected && myId && fullCommand && !mainCommand.startsWith('/') && mainCommand !== 'help' && mainCommand !== 'date') {
                 const sender = myName || myId;
                 const sanitizedContent = fullCommand.replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -375,6 +376,7 @@
                     print("&nbsp;&nbsp;<b>/clear</b>      - データベースのメッセージをすべて削除します。 (パスワードが必要です)");
                     print("&nbsp;&nbsp;<b>/upload</b>     - ファイルをアップロードします。");
                     print("&nbsp;&nbsp;<b>/date</b>       - 現在の日本時間をBOTが投稿します。");
+                    print("&nbsp;&nbsp;<b>/ban</b> [ID]   - IDを指定してユーザーをBANします。 (管理者 'ゆず'のみ)");
                     print("&nbsp;&nbsp;<b>[メッセージ]</b> - 全員にメッセージを投稿します。");
                     break;
                 
@@ -466,6 +468,35 @@
                         }
                     } catch (error) {
                         print(`BOTコマンドの実行中にエラーが発生しました: ${error.message}`, 'system');
+                    }
+                    break;
+                
+                case '/ban':
+                    if (myName !== 'ゆず') {
+                        print("このコマンドを実行する権限がありません。", 'system');
+                        return;
+                    }
+                    if (args.length === 0) {
+                        print("使用方法: /ban [ID]", 'system');
+                        return;
+                    }
+                    const userIdToBan = args[0];
+                    try {
+                        const response = await fetch('/api/ban-user', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ senderName: myName, userIdToBan })
+                        });
+
+                        const result = await response.json();
+
+                        if (response.ok) {
+                            print(result.message, 'system');
+                        } else {
+                            print(`ユーザーのBANに失敗しました: ${result.error}`, 'system');
+                        }
+                    } catch (error) {
+                        print(`ユーザーのBAN中にエラーが発生しました: ${error.message}`, 'system');
                     }
                     break;
 
