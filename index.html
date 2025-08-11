@@ -300,8 +300,7 @@
                     .eq('name', name)
                     .single();
 
-                if (userError && userError.code === 'PGRST116') { // ユーザーが見つからない
-                    // 新規登録
+                if (userError && userError.code === 'PGRST116') {
                     const { error: insertError } = await supabaseClient
                         .from('users')
                         .insert({ name: name, id: generatedId, password_hash: hash });
@@ -316,9 +315,8 @@
                     setCookie('myTerminalId', myId, 365);
                     print(`新しいアカウントが登録されました。名前: ${myName}, ID: ${myId}`, 'system');
 
-                } else if (userData) { // ユーザーが見つかった
+                } else if (userData) {
                     if (userData.password_hash === hash) {
-                        // ログイン成功
                         myName = userData.name;
                         myId = userData.id;
                         setCookie('myTerminalName', myName, 365);
@@ -387,6 +385,11 @@
         }
         
         fileInput.addEventListener('change', async function(event) {
+            if (!myName || !myId) {
+                print("ログインしてから投稿してください。", 'system');
+                return;
+            }
+
             const file = event.target.files[0];
             if (!file) {
                 print("ファイルが選択されませんでした。", 'system');
@@ -412,7 +415,7 @@
 
             const publicUrl = publicUrlData.publicUrl;
             
-            const sender = myName || myId;
+            const sender = myName;
             const content = `ファイルがアップロードされました: <a href="${publicUrl}" target="_blank" class="uploaded-file">${file.name}</a>`;
 
             const { error: insertError } = await supabaseClient
@@ -548,4 +551,4 @@
                                 print("データベースのメッセージをすべて削除しました。", 'system');
                                 
                                 if (isConnected) {
-                               
+ 
