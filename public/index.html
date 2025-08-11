@@ -344,7 +344,7 @@
             const args = parts.slice(1);
             const fullCommand = command;
 
-            if (isConnected && myId && fullCommand && !mainCommand.startsWith('/') && mainCommand !== 'help') {
+            if (isConnected && myId && fullCommand && !mainCommand.startsWith('/') && mainCommand !== 'help' && mainCommand !== 'date') {
                 const sender = myName || myId;
                 const sanitizedContent = fullCommand.replace(/</g, '&lt;').replace(/>/g, '&gt;');
                 
@@ -374,6 +374,7 @@
                     print("&nbsp;&nbsp;<b>/name</b> [新しい名前] - 自分の名前を変更します。");
                     print("&nbsp;&nbsp;<b>/clear</b>      - データベースのメッセージをすべて削除します。 (パスワードが必要です)");
                     print("&nbsp;&nbsp;<b>/upload</b>     - ファイルをアップロードします。");
+                    print("&nbsp;&nbsp;<b>/date</b>       - 現在の日本時間をBOTが投稿します。");
                     print("&nbsp;&nbsp;<b>[メッセージ]</b> - 全員にメッセージを投稿します。");
                     break;
                 
@@ -453,6 +454,19 @@
 
                 case '/upload':
                     fileInput.click();
+                    break;
+                
+                case 'date':
+                case '/date':
+                    try {
+                        const response = await fetch('/api/get-time', { method: 'POST' });
+                        if (!response.ok) {
+                            const errorData = await response.json();
+                            print(`BOTコマンドの実行に失敗しました: ${errorData.error}`, 'system');
+                        }
+                    } catch (error) {
+                        print(`BOTコマンドの実行中にエラーが発生しました: ${error.message}`, 'system');
+                    }
                     break;
 
                 default:
