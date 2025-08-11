@@ -123,14 +123,10 @@
         const commandLine = document.getElementById('command-line');
         const fileInput = document.getElementById('file-input');
 
-        // --- ここをあなたのSupabaseプロジェクトの情報に置き換えてください ---
-        const SUPABASE_URL = 'https://zlbfsyixwncpictplcvk.supabase.co'; 
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpsYmZzeWl4d25jcGljdHBsY3ZrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ4MDkwOTcsImV4cCI6MjA3MDM4NTA5N30.AGoC-NxJTJPKnyU1pb2ICONGYd4b5EzdW6nkcOyXdao';
-        // -----------------------------------------------------------
-
+        // クライアントサイドからはSupabaseの認証情報を削除
         let myId = '';
         let myName = '';
-        let supabaseClient = null;
+        let supabaseClient = null; // Supabaseクライアントはサーバーサイドで処理
         let isConnected = false;
         let updateInterval = null;
         let lastMessageId = 0;
@@ -140,45 +136,39 @@
 
         async function initializeSupabase() {
             try {
-                const { createClient } = supabase;
-                supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-                print("Supabaseクライアントを初期化しました。", 'system');
+                // クライアントサイドでは、直接Supabaseと通信しない
+                // したがって、この関数はシンプルにする
+                print("クライアントはサーバー経由で通信します。", 'system');
                 await connectToBoard();
             } catch (error) {
-                print(`Supabaseへの接続に失敗しました: ${error.message}`, 'system');
+                print(`サーバーへの接続に失敗しました: ${error.message}`, 'system');
             }
         }
         
         async function connectToBoard() {
-            if (!supabaseClient) {
-                print("Supabaseクライアントが初期化されていません。", 'system');
+            // クライアントサイドの接続は、定期的なAPI呼び出しで代替
+            if (isConnected) {
+                print("すでに掲示板に接続しています。", 'system');
                 return;
             }
+            
+            print("掲示板に接続中...", 'system');
 
-            try {
-                if (isConnected) {
-                    print("すでに掲示板に接続しています。", 'system');
-                    return;
-                }
-                
-                print("掲示板に接続中...", 'system');
+            await fetchAllMessages();
 
-                await fetchAllMessages();
-
-                isConnected = true;
-                setCookie('isConnected', 'true', 365);
-                print("掲示板に接続しました。メッセージを投稿できます。", 'system');
-                startUpdating();
-            } catch (error) {
-                print(`掲示板への接続に失敗しました: ${error.message}`, 'system');
-            }
+            isConnected = true;
+            setCookie('isConnected', 'true', 365);
+            print("掲示板に接続しました。メッセージを投稿できます。", 'system');
+            startUpdating();
         }
 
         async function fetchAllMessages() {
-            const { data, error } = await supabaseClient.from('messages').select('*').order('created_at', { ascending: true });
+            // サーバーから全メッセージを取得するAPIエンドポイントを呼び出す
+            const response = await fetch('/api/get-all-messages');
+            const { data, error } = await response.json();
             
             if (error) {
-                throw error;
+                throw new Error(error);
             }
 
             if (data.length > 0) {
@@ -192,11 +182,9 @@
         async function fetchNewMessages() {
             if (!isConnected) return;
 
-            const { data, error } = await supabaseClient
-                .from('messages')
-                .select('*')
-                .gt('id', lastMessageId)
-                .order('created_at', { ascending: true });
+            // サーバーから新しいメッセージを取得するAPIエンドポイントを呼び出す
+            const response = await fetch(`/api/get-new-messages?lastMessageId=${lastMessageId}`);
+            const { data, error } = await response.json();
             
             if (error) {
                 console.error('メッセージの取得に失敗:', error);
@@ -307,38 +295,13 @@
         }
         
         async function cleanupOldFiles() {
-            const { data: files, error } = await supabaseClient.storage.from('uploads').list();
-            if (error) {
-                console.error('ファイルリストの取得に失敗:', error);
-                return;
-            }
-
-            const now = new Date();
-            const toDelete = [];
-
-            if (files.length >= MAX_FILES) {
-                print(`ファイル数が上限(${MAX_FILES}個)を超えました。すべてのファイルを削除します。`, 'system');
-                files.forEach(file => {
-                    if (file.name !== '.emptyFolderPlaceholder') {
-                        toDelete.push(file.name);
-                    }
-                });
+            // サーバーサイドAPIを介してファイル削除を実行する
+            // この機能もサーバーサイドで実装する必要がある
+            const response = await fetch('/api/cleanup-files', { method: 'POST' });
+            if (response.ok) {
+                print("古いファイルを削除しました。", 'system');
             } else {
-                files.forEach(file => {
-                    const fileTime = new Date(file.created_at);
-                    if ((now - fileTime) > EXPIRATION_TIME && file.name !== '.emptyFolderPlaceholder') {
-                        toDelete.push(file.name);
-                    }
-                });
-            }
-
-            if (toDelete.length > 0) {
-                const { error: deleteError } = await supabaseClient.storage.from('uploads').remove(toDelete);
-                if (deleteError) {
-                    print(`ファイルの削除に失敗しました: ${deleteError.message}`, 'system');
-                } else {
-                    print(`${toDelete.length}個のファイルを削除しました。`, 'system');
-                }
+                print("古いファイルの削除に失敗しました。", 'system');
             }
         }
         
@@ -352,6 +315,13 @@
             await cleanupOldFiles();
 
             const fileName = `${Date.now()}-${file.name}`;
+            
+            // クライアントサイドでファイルアップロード
+            // この部分はサーバーサイドの機能と切り離し、SupabaseのSDKをクライアントで使う
+            // サーバーサイドでAPI経由でアップロードを処理することも可能
+            const { createClient } = supabase;
+            const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY); // ファイルアップロードはクライアントから直接
+            
             const { data, error } = await supabaseClient.storage
                 .from('uploads')
                 .upload(fileName, file);
@@ -371,12 +341,17 @@
             const sender = myName || myId;
             const content = `ファイルがアップロードされました: <a href="${publicUrl}" target="_blank" class="uploaded-file">${file.name}</a>`;
 
-            const { error: insertError } = await supabaseClient
-                .from('messages')
-                .insert({ sender_id: sender, content: content });
+            // 投稿処理はサーバーサイドAPIへ送信
+            const postResponse = await fetch('/api/post-message', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ sender_id: sender, content: content })
+            });
 
-            if (insertError) {
-                print(`投稿に失敗しました: ${insertError.message}`, 'system');
+            if (!postResponse.ok) {
+                print('投稿に失敗しました。', 'system');
             } else {
                 print(`ファイル ${file.name} をアップロードしました。`, 'system');
             }
@@ -406,11 +381,19 @@
 
             if (isConnected && myId && fullCommand && !mainCommand.startsWith('/') && mainCommand !== 'help') {
                 const sender = myName || myId;
-                const { error } = await supabaseClient
-                    .from('messages')
-                    .insert({ sender_id: sender, content: fullCommand });
-                if (error) {
-                    print(`投稿に失敗しました: ${error.message}`, 'system');
+                const sanitizedContent = fullCommand.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                
+                // 投稿処理はサーバーサイドAPIへ送信
+                const response = await fetch('/api/post-message', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ sender_id: sender, content: sanitizedContent })
+                });
+                
+                if (!response.ok) {
+                    print('投稿に失敗しました。', 'system');
                 }
                 return;
             }
@@ -440,14 +423,14 @@
                 case '/name':
                     if (args.length > 0) {
                         const newName = args.join(' ');
-
-                        const { data, error } = await supabaseClient
-                            .from('messages')
-                            .select('sender_id')
-                            .eq('sender_id', newName)
-                            .limit(1);
+                        const response = await fetch('/api/check-name', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ name: newName })
+                        });
+                        const { exists } = await response.json();
                         
-                        if (data && data.length > 0) {
+                        if (exists) {
                             print(`名前'${newName}'はすでに使われています。別の名前を選んでください。`, 'system');
                         } else {
                             myName = newName;
@@ -473,38 +456,22 @@
                 case '/clear':
                     const password = prompt("パスワードを入力してください:");
                     if (password) {
-                        try {
-                            const { data, error } = await supabaseClient
-                                .from('passwords')
-                                .select('value')
-                                .eq('id', 'clear_password')
-                                .single();
-
-                            if (error) {
-                                throw error;
+                        const response = await fetch('/api/clear-messages', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ password: password })
+                        });
+                        
+                        if (response.ok) {
+                            terminal.innerHTML = "<div>ようこそ！</div><div>掲示板に接続し、10秒ごとに自動更新を開始しました。</div><div>'help'でコマンドを確認できます。</div><br>";
+                            print("データベースのメッセージをすべて削除しました。", 'system');
+                            lastMessageId = 0;
+                            if (isConnected) {
+                                connectToBoard();
                             }
-
-                            if (data.value === password) {
-                                const { error: deleteError } = await supabaseClient
-                                    .from('messages')
-                                    .delete()
-                                    .gt('id', 0);
-                                
-                                if (deleteError) {
-                                    throw deleteError;
-                                }
-                                
-                                terminal.innerHTML = "<div>ようこそ！</div><div>掲示板に接続し、10秒ごとに自動更新を開始しました。</div><div>'help'でコマンドを確認できます。</div><br>";
-                                print("データベースのメッセージをすべて削除しました。", 'system');
-                                
-                                if (isConnected) {
-                                    connectToBoard();
-                                }
-                            } else {
-                                print("パスワードが違います。", 'system');
-                            }
-                        } catch (error) {
-                            print(`エラーが発生しました: ${error.message}`, 'system');
+                        } else {
+                            const errorData = await response.json();
+                            print(`クリアに失敗しました: ${errorData.error}`, 'system');
                         }
                     } else {
                          print("パスワードが入力されませんでした。", 'system');
