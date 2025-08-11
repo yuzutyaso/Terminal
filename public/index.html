@@ -111,7 +111,7 @@
             
             <div class="input-area">
                 <span class="prompt">$</span>
-                <input type="text" id="command-line" autofocus>
+                <input type="text" id="command-line" autofocus maxlength="100">
             </div>
         </div>
     </div>
@@ -348,6 +348,11 @@
                 const sender = myName || myId;
                 const sanitizedContent = fullCommand.replace(/</g, '&lt;').replace(/>/g, '&gt;');
                 
+                if (sanitizedContent.length > 100) {
+                    print("メッセージは100文字以内で入力してください。", 'system');
+                    return;
+                }
+
                 const response = await fetch('/api/post-message', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -386,6 +391,11 @@
                 case '/name':
                     if (args.length > 0) {
                         const newName = args.join(' ');
+                        if (newName.length > 15) {
+                            print("名前は15文字以内で入力してください。", 'system');
+                            return;
+                        }
+
                         const response = await fetch('/api/check-name', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
