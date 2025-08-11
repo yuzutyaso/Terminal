@@ -298,7 +298,32 @@
                 return;
             }
             
-            print("ファイルアップロード機能は現在開発中です。しばらくお待ちください。", 'system');
+            await cleanupOldFiles();
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('senderId', myId);
+            formData.append('senderName', myName);
+            
+            print(`ファイル ${file.name} をアップロードしています...`, 'system');
+
+            try {
+                const response = await fetch('/api/upload-file', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    print(`ファイル ${file.name} をアップロードしました。`, 'system');
+                } else {
+                    print(`ファイルのアップロードに失敗しました: ${result.error}`, 'system');
+                }
+            } catch (error) {
+                print(`ファイルのアップロード中にエラーが発生しました: ${error.message}`, 'system');
+            }
+            
             fileInput.value = '';
             commandLine.focus();
         });
@@ -343,7 +368,7 @@
                     print("&nbsp;&nbsp;<b>/id</b>         - あなたのIDと名前を表示します。");
                     print("&nbsp;&nbsp;<b>/name</b> [新しい名前] - 自分の名前を変更します。");
                     print("&nbsp;&nbsp;<b>/clear</b>      - データベースのメッセージをすべて削除します。 (パスワードが必要です)");
-                    print("&nbsp;&nbsp;<b>/upload</b>     - ファイルをアップロードします。(この機能は現在開発中です)");
+                    print("&nbsp;&nbsp;<b>/upload</b>     - ファイルをアップロードします。");
                     print("&nbsp;&nbsp;<b>[メッセージ]</b> - 全員にメッセージを投稿します。");
                     break;
                 
