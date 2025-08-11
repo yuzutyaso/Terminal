@@ -34,6 +34,12 @@ fs.mkdir(UPLOAD_DIR, { recursive: true }).catch(err => {
     }
 });
 
+// Helper function to get client IP
+const getClientIp = (req) => {
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    return ip ? ip.split(',')[0].trim() : null;
+};
+
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -46,7 +52,19 @@ app.post('/api/post-message', async (req, res) => {
             return res.status(400).json({ error: 'sender_id and content are required' });
         }
         
-        // BANされているかチェック
+        // IP BANされているかチェック
+        const clientIp = getClientIp(req);
+        if (clientIp) {
+            const { data: ipBanData, error: ipBanError } = await supabase.from('banned_ips').select('ip_address').eq('ip_address', clientIp).limit(1);
+            if (ipBanError) {
+                console.error('Supabase DB banned_ips select error:', ipBanError);
+            }
+            if (ipBanData && ipBanData.length > 0) {
+                return res.status(403).json({ error: 'このIPアドレスからの投稿は禁止されています。' });
+            }
+        }
+
+        // ID BANされているかチェック
         const { data: bannedData, error: bannedError } = await supabase.from('banned_users').select('user_id').eq('user_id', sender_id).limit(1);
         if (bannedError) {
              console.error('Supabase DB banned_users select error:', bannedError);
@@ -62,7 +80,7 @@ app.post('/api/post-message', async (req, res) => {
             return res.status(400).json({ error: '名前は15文字以内で入力してください。' });
         }
 
-        const { error } = await supabase.from('messages').insert([{ sender_id, content }]);
+        const { error } = await supabase.from('messages').insert([{ sender_id, content, ip_address: clientIp }]);
         if (error) {
             console.error('Supabase DB insert error:', error);
             return res.status(500).json({ error: 'Failed to post message to database.' });
@@ -197,7 +215,22 @@ app.post('/api/upload-file', upload.single('file'), async (req, res) => {
         const { senderId, senderName } = req.body;
         const file = req.file;
         
-        // BANされているかチェック
+        // IP BANされているかチェック
+        const clientIp = getClientIp(req);
+        if (clientIp) {
+            const { data: ipBanData, error: ipBanError } = await supabase.from('banned_ips').select('ip_address').eq('ip_address', clientIp).limit(1);
+            if (ipBanError) {
+                console.error('Supabase DB banned_ips select error:', ipBanError);
+            }
+            if (ipBanData && ipBanData.length > 0) {
+                 if (file) {
+                    await fs.unlink(file.path).catch(err => console.error('Failed to unlink file:', err));
+                }
+                return res.status(403).json({ error: 'このIPアドレスからの投稿は禁止されています。' });
+            }
+        }
+        
+        // ID BANされているかチェック
         const { data: bannedData, error: bannedError } = await supabase.from('banned_users').select('user_id').eq('user_id', senderId).limit(1);
         if (bannedError) {
              console.error('Supabase DB banned_users select error:', bannedError);
@@ -246,7 +279,7 @@ app.post('/api/upload-file', upload.single('file'), async (req, res) => {
         const publicUrl = publicUrlData.publicUrl;
         const finalContent = `ファイルがアップロードされました: <a href="${publicUrl}" target="_blank" class="uploaded-file">${file.originalname}</a>`;
 
-        const { error: insertError } = await supabase.from('messages').insert({ sender_id: displayName, content: finalContent });
+        const { error: insertError } = await supabase.from('messages').insert({ sender_id: displayName, content: finalContent, ip_address: clientIp });
 
         if (insertError) {
             console.error('Supabase DB insert error:', insertError);
@@ -305,5 +338,69 @@ app.post('/api/ban-user', async (req, res) => {
         res.status(500).json({ error: 'サーバーエラー' });
     }
 });
+
+// 指定したIDのユーザーのIPアドレスを取得するAPI
+app.post('/api/get-ip', async (req, res) => {
+    try {
+        const { senderName, userId } = req.body;
+        if (senderName !== 'ゆず') {
+            return res.status(403).json({ error: 'このコマンドを実行する権限がありません。' });
+        }
+
+        if (!userId) {
+            return res.status(400).json({ error: 'IPアドレスを取得するユーザーIDを指定してください。' });
+        }
+
+        const { data, error } = await supabase.from('messages').select('ip_address').eq('sender_id', userId).order('created_at', { ascending: false }).limit(1).single();
+
+        if (error) {
+            console.error('Supabase DB get-ip error:', error);
+            return res.status(500).json({ error: 'IPアドレスの取得に失敗しました。' });
+        }
+
+        if (!data || !data.ip_address) {
+            return res.status(404).json({ error: '指定されたユーザーIDのIPアドレスは見つかりませんでした。' });
+        }
+        
+        // 取得したIPアドレスをBOTとして投稿
+        const content = `ユーザーID「${userId}」の最新のIPアドレス: ${data.ip_address}`;
+        const { error: postError } = await supabase.from('messages').insert([{ sender_id: 'BOT', content }]);
+        
+        if (postError) {
+             return res.status(500).json({ error: 'IPアドレスの表示に失敗しました。' });
+        }
+
+        res.status(200).json({ message: 'IPアドレスを表示しました。' });
+    } catch (err) {
+        console.error('Server error in /api/get-ip:', err);
+        res.status(500).json({ error: 'サーバーエラー' });
+    }
+});
+
+// IPアドレスをBANするAPI
+app.post('/api/ip-ban', async (req, res) => {
+    try {
+        const { senderName, ipAddressToBan } = req.body;
+        if (senderName !== 'ゆず') {
+            return res.status(403).json({ error: 'このコマンドを実行する権限がありません。' });
+        }
+
+        if (!ipAddressToBan) {
+            return res.status(400).json({ error: 'BANするIPアドレスを指定してください。' });
+        }
+        
+        const { error } = await supabaseAdmin.from('banned_ips').insert([{ ip_address: ipAddressToBan }]);
+        if (error) {
+            console.error('Supabase DB ip-ban error:', error);
+            return res.status(500).json({ error: 'IPアドレスのBANに失敗しました。' });
+        }
+
+        res.status(200).json({ message: `IPアドレス ${ipAddressToBan} をBANしました。` });
+    } catch (err) {
+        console.error('Server error in /api/ip-ban:', err);
+        res.status(500).json({ error: 'サーバーエラー' });
+    }
+});
+
 
 module.exports = app;
