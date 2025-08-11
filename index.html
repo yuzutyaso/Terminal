@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>みんなのリアルタイム掲示板</title>
+    <title>Terminal</title>
     <style>
         body {
             background-color: #2d2d2d;
@@ -104,6 +104,7 @@
         <div id="terminal-view">
             <div id="terminal">
                 <div>ようこそ！</div>
+                <div>掲示板に接続し、10秒ごとに自動更新を開始しました。</div>
                 <div>'help'でコマンドを確認できます。</div>
                 <br>
             </div>
@@ -117,7 +118,6 @@
     <input type="file" id="file-input" style="display: none;">
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://cdn.jsdelivr.net/npm/js-sha256@0.9.0/src/sha256.min.js"></script>
     <script>
         const terminal = document.getElementById('terminal');
         const commandLine = document.getElementById('command-line');
@@ -143,6 +143,7 @@
                 const { createClient } = supabase;
                 supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
                 print("Supabaseクライアントを初期化しました。", 'system');
+                await connectToBoard();
             } catch (error) {
                 print(`Supabaseへの接続に失敗しました: ${error.message}`, 'system');
             }
@@ -182,7 +183,7 @@
 
             if (data.length > 0) {
                 data.forEach(msg => {
-                    displayMessage(msg.sender_id, msg.my_id, msg.content, msg.created_at);
+                    displayMessage(msg.sender_id, msg.content, msg.created_at);
                 });
                 lastMessageId = data[data.length - 1].id;
             }
@@ -204,7 +205,7 @@
 
             if (data.length > 0) {
                 data.forEach(msg => {
-                    displayMessage(msg.sender_id, msg.my_id, msg.content, msg.created_at);
+                    displayMessage(msg.sender_id, msg.content, msg.created_at);
                 });
                 lastMessageId = data[data.length - 1].id;
             }
@@ -232,9 +233,9 @@
             return `${hours}:${minutes}:${seconds}`;
         }
         
-        function displayMessage(sender, id, content, timestamp = null) {
-            const isMyMessage = id === myId;
-            const displayName = `${sender}(${id})`;
+        function displayMessage(sender, content, timestamp = null) {
+            const isMyMessage = sender === myName || sender === myId;
+            const displayName = sender;
             const className = isMyMessage ? 'my-message' : 'other-message';
             
             let messageHtml = `[${displayName}] ${content}`;
@@ -275,74 +276,33 @@
             document.cookie = name + "=" + (value || "")  + expires + "; path=/";
         }
 
-        async function registerOrLogin() {
-            while (!myName || !myId) {
-                const name = prompt("あなたの名前を教えてください:");
-                if (!name) {
-                    print("名前の入力は必須です。もう一度入力してください。", 'system');
-                    continue;
-                }
-
-                const password = prompt("パスワードを教えてください:");
-                if (!password) {
-                    print("パスワードの入力は必須です。もう一度入力してください。", 'system');
-                    continue;
-                }
-
-                const hash = sha256(password);
-                const generatedId = hash.substring(0, 6);
-
-                const { data: userData, error: userError } = await supabaseClient
-                    .from('users')
-                    .select('*')
-                    .eq('name', name)
-                    .single();
-
-                if (userError && userError.code === 'PGRST116') {
-                    const { error: insertError } = await supabaseClient
-                        .from('users')
-                        .insert({ name: name, id: generatedId, password_hash: hash });
-
-                    if (insertError) {
-                        print(`新規登録に失敗しました: ${insertError.message}`, 'system');
-                        continue;
-                    }
-                    myName = name;
-                    myId = generatedId;
-                    setCookie('myTerminalName', myName, 365);
-                    setCookie('myTerminalId', myId, 365);
-                    print(`新しいアカウントが登録されました。名前: ${myName}, ID: ${myId}`, 'system');
-
-                } else if (userData) {
-                    if (userData.password_hash === hash) {
-                        myName = userData.name;
-                        myId = userData.id;
-                        setCookie('myTerminalName', myName, 365);
-                        setCookie('myTerminalId', myId, 365);
-                        print(`ログインしました。名前: ${myName}, ID: ${myId}`, 'system');
-                    } else {
-                        print("パスワードが違います。もう一度入力してください。", 'system');
-                        continue;
-                    }
-                } else if (userError) {
-                    print(`データベースエラー: ${userError.message}`, 'system');
-                    continue;
-                }
+        function generateRandomId() {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            let result = '';
+            for (let i = 0; i < 6; i++) {
+                result += chars.charAt(Math.floor(Math.random() * chars.length));
             }
+            return result;
         }
         
         function loadUserInfo() {
             const idCookie = getCookie('myTerminalId');
             const nameCookie = getCookie('myTerminalName');
             
-            if (idCookie && nameCookie) {
+            if (idCookie) {
                 myId = idCookie;
-                myName = nameCookie;
                 print(`あなたのID: ${myId}`);
+            } else {
+                myId = generateRandomId();
+                setCookie('myTerminalId', myId, 365);
+                print(`新しいIDが生成されました: ${myId}`, 'system');
+            }
+
+            if (nameCookie) {
+                myName = nameCookie;
                 print(`あなたの名前: ${myName}`);
             } else {
                 myName = '';
-                myId = '';
             }
         }
         
@@ -383,11 +343,6 @@
         }
         
         fileInput.addEventListener('change', async function(event) {
-            if (!myName || !myId) {
-                print("ログインしてから投稿してください。", 'system');
-                return;
-            }
-
             const file = event.target.files[0];
             if (!file) {
                 print("ファイルが選択されませんでした。", 'system');
@@ -413,12 +368,12 @@
 
             const publicUrl = publicUrlData.publicUrl;
             
-            const sender = myName;
+            const sender = myName || myId;
             const content = `ファイルがアップロードされました: <a href="${publicUrl}" target="_blank" class="uploaded-file">${file.name}</a>`;
 
             const { error: insertError } = await supabaseClient
                 .from('messages')
-                .insert({ sender_id: sender, content: content, my_id: myId });
+                .insert({ sender_id: sender, content: content });
 
             if (insertError) {
                 print(`投稿に失敗しました: ${insertError.message}`, 'system');
@@ -434,7 +389,7 @@
             if (event.key === 'Enter') {
                 const command = commandLine.value.trim();
                 
-                const displayNameForPrompt = myName ? `${myName}(${myId})` : 'Anonymous';
+                const displayNameForPrompt = myName || myId || 'Anonymous';
                 print(`<div class="line"><span class="prompt">$ ${displayNameForPrompt}: </span><div>${command}</div></div>`);
 
                 await handleCommand(command);
@@ -450,10 +405,10 @@
             const fullCommand = command;
 
             if (isConnected && myId && fullCommand && !mainCommand.startsWith('/') && mainCommand !== 'help') {
-                const sender = myName;
+                const sender = myName || myId;
                 const { error } = await supabaseClient
                     .from('messages')
-                    .insert({ sender_id: sender, content: fullCommand, my_id: myId });
+                    .insert({ sender_id: sender, content: fullCommand, my_id: myId }); // my_idを追加
                 if (error) {
                     print(`投稿に失敗しました: ${error.message}`, 'system');
                 }
@@ -466,7 +421,6 @@
                     print("&nbsp;&nbsp;<b>/disconnect</b> - 掲示板から切断し、更新を停止します。");
                     print("&nbsp;&nbsp;<b>/id</b>         - あなたのIDと名前を表示します。");
                     print("&nbsp;&nbsp;<b>/name</b> [新しい名前] - 自分の名前を変更します。");
-                    print("&nbsp;&nbsp;<b>/check</b> [ID] - 指定されたIDの投稿者情報を確認します。");
                     print("&nbsp;&nbsp;<b>/clear</b>      - データベースのメッセージをすべて削除します。 (パスワードが必要です)");
                     print("&nbsp;&nbsp;<b>/upload</b>     - ファイルをアップロードします。");
                     print("&nbsp;&nbsp;<b>[メッセージ]</b> - 全員にメッセージを投稿します。");
@@ -484,29 +438,13 @@
                     break;
                 
                 case '/name':
-                    print("名前は登録時に設定されます。変更はできません。", 'system');
-                    break;
-                
-                case '/check':
                     if (args.length > 0) {
-                        const checkId = args[0];
-                        const { data, error } = await supabaseClient
-                            .from('messages')
-                            .select('sender_id')
-                            .eq('my_id', checkId)
-                            .order('created_at', { ascending: false })
-                            .limit(1)
-                            .single();
-                        
-                        if (error && error.code === 'PGRST116') {
-                            print(`ID ${checkId} に関連付けられた投稿は見つかりませんでした。`, 'system');
-                        } else if (data) {
-                            print(`ID ${checkId} の投稿者名: ${data.sender_id}`, 'system');
-                        } else {
-                            print(`ID ${checkId} の確認中にエラーが発生しました。`, 'system');
-                        }
+                        const newName = args.join(' ');
+                        myName = newName;
+                        setCookie('myTerminalName', myName, 365);
+                        print(`名前が'${myName}'に変更されました。`, 'system');
                     } else {
-                        print("使用方法: /check [ID]", 'system');
+                        print("使用方法: /name [新しい名前]", 'system');
                     }
                     break;
 
@@ -545,11 +483,43 @@
                                     throw deleteError;
                                 }
                                 
-                                terminal.innerHTML = "<div>ようこそ！</div><div>'help'でコマンドを確認できます。</div><br>";
+                                terminal.innerHTML = "<div>ようこそ！</div><div>掲示板に接続し、10秒ごとに自動更新を開始しました。</div><div>'help'でコマンドを確認できます。</div><br>";
                                 print("データベースのメッセージをすべて削除しました。", 'system');
                                 
                                 if (isConnected) {
                                     connectToBoard();
                                 }
                             } else {
-                             
+                                print("パスワードが違います。", 'system');
+                            }
+                        } catch (error) {
+                            print(`エラーが発生しました: ${error.message}`, 'system');
+                        }
+                    } else {
+                         print("パスワードが入力されませんでした。", 'system');
+                    }
+                    break;
+
+                case '/upload':
+                    fileInput.click();
+                    break;
+
+                default:
+                    if(fullCommand) {
+                        print(`コマンドが見つかりません: ${fullCommand}. 'help'で利用可能なコマンドを確認してください。`);
+                    }
+                    break;
+            }
+        }
+        
+        document.body.addEventListener('click', function() {
+            commandLine.focus();
+        });
+
+        loadUserInfo();
+        initializeSupabase();
+        cleanupOldFiles();
+        setInterval(cleanupOldFiles, 30 * 60 * 1000);
+    </script>
+</body>
+</html>
