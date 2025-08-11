@@ -402,5 +402,30 @@ app.post('/api/ip-ban', async (req, res) => {
     }
 });
 
+// ユーザーのBANを解除するAPI
+app.post('/api/release-ban', async (req, res) => {
+    try {
+        const { senderName, userIdToUnban } = req.body;
+        if (senderName !== 'ゆず') {
+            return res.status(403).json({ error: 'このコマンドを実行する権限がありません。' });
+        }
+
+        if (!userIdToUnban) {
+            return res.status(400).json({ error: 'BANを解除するユーザーIDを指定してください。' });
+        }
+
+        const { error } = await supabaseAdmin.from('banned_users').delete().eq('user_id', userIdToUnban);
+        if (error) {
+            console.error('Supabase DB release-ban error:', error);
+            return res.status(500).json({ error: 'BANの解除に失敗しました。' });
+        }
+
+        res.status(200).json({ message: `ユーザーID ${userIdToUnban} のBANを解除しました。` });
+    } catch (err) {
+        console.error('Server error in /api/release-ban:', err);
+        res.status(500).json({ error: 'サーバーエラー' });
+    }
+});
+
 
 module.exports = app;
