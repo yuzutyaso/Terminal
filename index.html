@@ -6,8 +6,8 @@
     <title>Terminal</title>
     <style>
         body {
-            background-color: #1a1a1a;
-            color: #f0f0f0;
+            background-color: #2d2d2d;
+            color: #ffffff;
             font-family: 'monospace', 'Courier New', Courier;
             font-size: 16px;
             line-height: 1.6;
@@ -27,9 +27,11 @@
             width: 100%;
             height: 90vh;
             overflow-y: scroll;
-            border: 1px solid #333;
-            padding: 10px;
+            border: 1px solid #555;
+            padding: 15px;
             box-sizing: border-box;
+            background-color: #1a1a1a;
+            border-radius: 8px;
         }
 
         .line {
@@ -37,19 +39,21 @@
         }
         
         .prompt {
-            color: #8f8;
+            color: #a9ffb4;
             margin-right: 8px;
+            font-weight: bold;
         }
         
         .input-area {
             display: flex;
             align-items: center;
+            margin-top: 10px;
         }
 
         #command-line {
             background-color: transparent;
             border: none;
-            color: #f0f0f0;
+            color: #ffffff;
             font-family: inherit;
             font-size: inherit;
             outline: none;
@@ -57,35 +61,40 @@
         }
 
         ::-webkit-scrollbar {
-            width: 8px;
+            width: 10px;
         }
         ::-webkit-scrollbar-track {
-            background: #1a1a1a;
+            background: #2d2d2d;
         }
         ::-webkit-scrollbar-thumb {
-            background: #555;
+            background: #6c6c6c;
+            border-radius: 5px;
         }
         ::-webkit-scrollbar-thumb:hover {
-            background: #777;
+            background: #888;
         }
         .message {
-            color: #ccc;
+            color: #dcdcdc;
         }
         .my-message {
-            color: #6495ed;
+            color: #98c3ff;
             margin-left: 20px;
         }
         .other-message {
-            color: #f08080;
+            color: #ffad87;
         }
         .system {
-            color: #fff;
+            color: #d1b464;
             font-weight: bold;
         }
         .timestamp {
             font-size: 0.8em;
-            color: #777;
+            color: #888;
             margin-left: 8px;
+        }
+        .uploaded-file {
+            color: #569cd6;
+            text-decoration: underline;
         }
     </style>
 </head>
@@ -106,12 +115,13 @@
             </div>
         </div>
     </div>
+    <input type="file" id="file-input" style="display: none;">
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
         const terminal = document.getElementById('terminal');
         const commandLine = document.getElementById('command-line');
-        const terminalView = document.getElementById('terminal-view');
+        const fileInput = document.getElementById('file-input');
 
         // --- ここをあなたのSupabaseプロジェクトの情報に置き換えてください ---
         const SUPABASE_URL = 'https://zlbfsyixwncpictplcvk.supabase.co'; 
@@ -125,7 +135,7 @@
         let updateInterval = null;
         let lastMessageId = 0;
         let currentInput = '';
-        const allowedUploaderId = 'DE39D5'; // ファイルアップロードを許可するID
+        const allowedUploaderId = 'DE39D5';
 
         async function initializeSupabase() {
             try {
@@ -294,6 +304,47 @@
                 myName = '';
             }
         }
+        
+        fileInput.addEventListener('change', async function(event) {
+            const file = event.target.files[0];
+            if (!file) {
+                print("ファイルが選択されませんでした。", 'system');
+                return;
+            }
+
+            const fileName = `${Date.now()}-${file.name}`;
+            const { data, error } = await supabaseClient.storage
+                .from('uploads')
+                .upload(fileName, file);
+
+            if (error) {
+                print(`ファイルのアップロードに失敗しました: ${error.message}`, 'system');
+                return;
+            }
+
+            const { data: publicUrlData } = supabaseClient
+                .storage
+                .from('uploads')
+                .getPublicUrl(fileName);
+
+            const publicUrl = publicUrlData.publicUrl;
+            
+            const sender = myName || myId;
+            const content = `ファイルがアップロードされました: <a href="${publicUrl}" target="_blank" class="uploaded-file">${file.name}</a>`;
+
+            const { error: insertError } = await supabaseClient
+                .from('messages')
+                .insert({ sender_id: sender, content: content });
+
+            if (insertError) {
+                print(`投稿に失敗しました: ${insertError.message}`, 'system');
+            } else {
+                print(`ファイル ${file.name} をアップロードしました。`, 'system');
+            }
+            
+            fileInput.value = '';
+            commandLine.focus();
+        });
 
         commandLine.addEventListener('keydown', async function(event) {
             if (event.key === 'Enter') {
@@ -416,8 +467,7 @@
                         print("このコマンドを実行する権限がありません。", 'system');
                         return;
                     }
-                    // ここにファイルアップロードのロジックを追加
-                    print("ファイルアップロード機能は現在開発中です。", 'system');
+                    fileInput.click();
                     break;
 
                 default:
