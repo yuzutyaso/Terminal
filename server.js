@@ -7,8 +7,8 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // Renderの環境変数からSupabaseのURLとキーを読み込む
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY; // ここにService Role Keyを設定
+const SUPABASE_URL = 'https://zlbfsyixwncpictplcvk.supabase.co/';
+const SUPABASE_SERVICE_KEY =　'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpsYmZzeWl4d25jcGljdHBsY3ZrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ4MDkwOTcsImV4cCI6MjA3MDM4NTA5N30.AGoC-NxJTJPKnyU1pb2ICONGYd4b5EzdW6nkcOyXdao'; // ここにService Role Keyを設定
 
 // Supabaseクライアントを初期化
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
