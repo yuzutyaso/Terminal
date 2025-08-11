@@ -45,6 +45,16 @@ app.post('/api/post-message', async (req, res) => {
         if (!sender_id || !content) {
             return res.status(400).json({ error: 'sender_id and content are required' });
         }
+        
+        // BANされているかチェック
+        const { data: bannedData, error: bannedError } = await supabase.from('banned_users').select('user_id').eq('user_id', sender_id).limit(1);
+        if (bannedError) {
+             console.error('Supabase DB banned_users select error:', bannedError);
+        }
+        if (bannedData && bannedData.length > 0) {
+            return res.status(403).json({ error: 'あなたは投稿を禁止されています。' });
+        }
+        
         if (content.length > 100) {
             return res.status(400).json({ error: 'メッセージは100文字以内で入力してください。' });
         }
@@ -186,6 +196,18 @@ app.post('/api/upload-file', upload.single('file'), async (req, res) => {
     try {
         const { senderId, senderName } = req.body;
         const file = req.file;
+        
+        // BANされているかチェック
+        const { data: bannedData, error: bannedError } = await supabase.from('banned_users').select('user_id').eq('user_id', senderId).limit(1);
+        if (bannedError) {
+             console.error('Supabase DB banned_users select error:', bannedError);
+        }
+        if (bannedData && bannedData.length > 0) {
+            if (file) {
+                await fs.unlink(file.path).catch(err => console.error('Failed to unlink file:', err));
+            }
+            return res.status(403).json({ error: 'あなたは投稿を禁止されています。' });
+        }
 
         if (!file || !senderId) {
             if (file) {
@@ -259,5 +281,29 @@ app.post('/api/get-time', async (req, res) => {
     }
 });
 
+// ユーザーをBANするAPI
+app.post('/api/ban-user', async (req, res) => {
+    try {
+        const { senderName, userIdToBan } = req.body;
+        if (senderName !== 'ゆず') {
+            return res.status(403).json({ error: 'このコマンドを実行する権限がありません。' });
+        }
+
+        if (!userIdToBan) {
+            return res.status(400).json({ error: 'BANするユーザーIDを指定してください。' });
+        }
+
+        const { error } = await supabaseAdmin.from('banned_users').insert([{ user_id: userIdToBan }]);
+        if (error) {
+            console.error('Supabase DB ban-user error:', error);
+            return res.status(500).json({ error: 'ユーザーのBANに失敗しました。' });
+        }
+
+        res.status(200).json({ message: `ユーザーID ${userIdToBan} をBANしました。` });
+    } catch (err) {
+        console.error('Server error in /api/ban-user:', err);
+        res.status(500).json({ error: 'サーバーエラー' });
+    }
+});
 
 module.exports = app;
