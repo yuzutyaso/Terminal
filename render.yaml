@@ -1,5 +1,6 @@
 services:
-  - type: static
+  - type: web
     name: my-supabase-bbs
-    env: static
-    staticPublishPath: "."
+    env: node
+    buildCommand: "npm install"
+    startCommand: "node server.js"
