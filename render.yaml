@@ -2,5 +2,4 @@ services:
   - type: static
     name: my-supabase-bbs
     env: static
-    buildCommand: ""
     staticPublishPath: "."
