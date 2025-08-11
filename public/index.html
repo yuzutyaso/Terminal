@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>みんなのリアルタイム掲示板</title>
+    <style>
+        /* CSSは省略 */
+    </style>
+</head>
+<body>
+
+    <div id="app-container">
+        <div id="terminal-view">
+            <div id="terminal">
+                <div>ようこそ！</div>
+                <div>掲示板に接続し、10秒ごとに自動更新を開始しました。</div>
+                <div>'help'でコマンドを確認できます。</div>
+                <br>
+            </div>
+            
+            <div class="input-area">
+                <span class="prompt">$</span>
+                <input type="text" id="command-line" autofocus>
+            </div>
+        </div>
+    </div>
+    <input type="file" id="file-input" style="display: none;">
+
+    <script>
+        const terminal = document.getElementById('terminal');
+        const commandLine = document.getElementById('command-line');
+        const fileInput = document.getElementById('file-input');
+
+        let myId = '';
+        let myName = '';
+        let isConnected = false;
+        let updateInterval = null;
+        let lastMessageId = 0;
+        const EXPIRATION_TIME = 24 * 60 * 60 * 1000;
+
+        async function initialize() {
+            print("クライアントはサーバー経由で通信します。", 'system');
+            loadUserInfo();
+            await connectToBoard();
+            setInterval(cleanupOldFiles, 30 * 60 * 1000);
+        }
+        
+        async function connectToBoard() {
+            if (isConnected) {
+                print("すでに掲示板に接続しています。", 'system');
+                return;
+            }
+            
+            print("掲示板に接続中...", 'system');
+            await fetchAllMessages();
+            isConnected = true;
+            setCookie('isConnected', 'true', 365);
+            print("掲示板に接続しました。メッセージを投稿できます。", 'system');
+            startUpdating();
+        }
+
+        async function fetchAllMessages() {
+            try {
+                const response = await fetch('/api/get-all-messages');
+                if (!response.ok) throw new Error('メッセージの取得に失敗しました');
+                const { data } = await response.json();
+                
+                if (data.length > 0) {
+                    data.forEach(msg => {
+                        displayMessage(msg.sender_id, msg.content, msg.created_at);
+                    });
+                    lastMessageId = data[data.length - 1].id;
+                }
+            } catch (error) {
+                print(`メッセージの取得に失敗しました: ${error.message}`, 'system');
+            }
+        }
+        
+        async function fetchNewMessages() {
+            if (!isConnected) return;
+            try {
+                const response = await fetch(`/api/get-new-messages?lastMessageId=${lastMessageId}`);
+                if (!response.ok) throw new Error('新しいメッセージの取得に失敗しました');
+                const { data } = await response.json();
+                
+                if (data.length > 0) {
+                    data.forEach(msg => {
+                        displayMessage(msg.sender_id, msg.content, msg.created_at);
+                    });
+                    lastMessageId = data[data.length - 1].id;
+                }
+            } catch (error) {
+                print(`新しいメッセージの取得に失敗しました: ${error.message}`, 'system');
+            }
+        }
+
+        function startUpdating() {
+            if (updateInterval) clearInterval(updateInterval);
+            updateInterval = setInterval(fetchNewMessages, 10000);
+        }
+
+        function stopUpdating() {
+            if (updateInterval) {
+                clearInterval(updateInterval);
+                updateInterval = null;
+            }
+        }
+
+        function formatTimestamp(timestamp) {
+            const date = new Date(timestamp);
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const seconds = String(date.getSeconds()).padStart(2, '0');
+            return `${hours}:${minutes}:${seconds}`;
+        }
+        
+        function displayMessage(sender, content, timestamp = null) {
+            const isMyMessage = sender === myName || sender === myId;
+            const displayName = sender;
+            const className = isMyMessage ? 'my-message' : 'other-message';
+            
+            let messageHtml = `[${displayName}] ${content}`;
+            if (timestamp) {
+                const formattedTime = formatTimestamp(timestamp);
+                messageHtml += `<span class="timestamp">${formattedTime}</span>`;
+            }
+            print(messageHtml, className);
+        }
+        
+        function print(message, className = 'message') {
+            const newLine = document.createElement('div');
+            newLine.className = className;
+            newLine.innerHTML = message;
+            terminal.appendChild(newLine);
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        // Cookie関連の関数は省略
+        // loadUserInfo, generateRandomId, setCookie, getCookie はそのまま
+
+        async function cleanupOldFiles() {
+            try {
+                const response = await fetch('/api/cleanup-files', { method: 'POST' });
+                if (response.ok) {
+                    print("古いファイルを削除しました。", 'system');
+                } else {
+                    const errorData = await response.json();
+                    print(`古いファイルの削除に失敗しました: ${errorData.error}`, 'system');
+                }
+            } catch (error) {
+                print(`古いファイルの削除に失敗しました: ${error.message}`, 'system');
+            }
+        }
+        
+        fileInput.addEventListener('change', async function(event) {
+            const file = event.target.files[0];
+            if (!file) {
+                print("ファイルが選択されませんでした。", 'system');
+                return;
+            }
+            
+            // クライアントでファイルアップロード
+            // この機能はクライアントサイドでの実装が複雑なため、
+            // SupabaseのURLとAPIキーをこの部分にのみ記述するか、
+            // サーバーサイドでのファイルアップロードAPIを別途作成する必要があります。
+            // サーバーサイドでの実装がより安全です。
+            print("ファイルアップロード機能は現在開発中です。しばらくお待ちください。", 'system');
+            fileInput.value = '';
+            commandLine.focus();
+        });
+
+        commandLine.addEventListener('keydown', async function(event) {
+            if (event.key === 'Enter') {
+                const command = commandLine.value.trim();
+                const displayNameForPrompt = myName || myId || 'Anonymous';
+                print(`<div class="line"><span class="prompt">$ ${displayNameForPrompt}: </span><div>${command}</div></div>`);
+                await handleCommand(command);
+                commandLine.value = '';
+            }
+        });
+
+        async function handleCommand(command) {
+            const parts = command.split(' ');
+            const mainCommand = parts[0].toLowerCase();
+            const args = parts.slice(1);
+            const fullCommand = command;
+
+            if (isConnected && myId && fullCommand && !mainCommand.startsWith('/') && mainCommand !== 'help') {
+                const sender = myName || myId;
+                const sanitizedContent = fullCommand.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                
+                const response = await fetch('/api/post-message', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sender_id: sender, content: sanitizedContent })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    print(`投稿に失敗しました: ${errorData.error}`, 'system');
+                }
+                return;
+            }
+
+            switch (mainCommand) {
+                // ... 各コマンドのfetchリクエストを記述 ...
+            }
+        }
+        
+        document.body.addEventListener('click', function() {
+            commandLine.focus();
+        });
+
+        initialize();
+    </script>
+</body>
+</html>
