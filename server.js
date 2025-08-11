@@ -224,8 +224,6 @@ app.post('/api/upload-file', upload.single('file'), async (req, res) => {
         const publicUrl = publicUrlData.publicUrl;
         const finalContent = `ファイルがアップロードされました: <a href="${publicUrl}" target="_blank" class="uploaded-file">${file.originalname}</a>`;
 
-        // ここにあった文字数制限のチェックを削除しました。
-
         const { error: insertError } = await supabase.from('messages').insert({ sender_id: displayName, content: finalContent });
 
         if (insertError) {
