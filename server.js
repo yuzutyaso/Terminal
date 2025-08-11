@@ -12,8 +12,10 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
+// ★ 環境変数が設定されていない場合は、エラーを投げるのではなく、アプリケーションが起動しないようにする ★
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_KEY) {
     console.error('環境変数が設定されていません。VercelのダッシュボードでSUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_KEYを設定してください。');
+    process.exit(1); // 環境変数がなければプロセスを終了
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -24,7 +26,11 @@ app.use(bodyParser.json());
 
 app.use(express.static('public'));
 
-const upload = multer({ dest: 'uploads/' });
+// multerの一時保存先ディレクトリを作成
+const UPLOAD_DIR = 'uploads/';
+fs.mkdir(UPLOAD_DIR, { recursive: true }).catch(console.error);
+
+const upload = multer({ dest: UPLOAD_DIR });
 
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -32,141 +38,179 @@ app.get('/', (req, res) => {
 
 // 投稿用API
 app.post('/api/post-message', async (req, res) => {
-    const { sender_id, content } = req.body;
+    try {
+        const { sender_id, content } = req.body;
+        if (!sender_id || !content) {
+            return res.status(400).json({ error: 'sender_id and content are required' });
+        }
+        if (content.length > 100) {
+            return res.status(400).json({ error: 'メッセージは100文字以内で入力してください。' });
+        }
+        if (sender_id.length > 15) {
+            return res.status(400).json({ error: '名前は15文字以内で入力してください。' });
+        }
 
-    if (!sender_id || !content) {
-        return res.status(400).json({ error: 'sender_id and content are required' });
+        const { error } = await supabase.from('messages').insert([{ sender_id, content }]);
+        if (error) {
+            console.error('Supabase DB insert error:', error);
+            return res.status(500).json({ error: 'Failed to post message to database.' });
+        }
+        res.status(200).json({ message: 'Message posted successfully' });
+    } catch (err) {
+        console.error('Server error in /api/post-message:', err);
+        res.status(500).json({ error: 'サーバーエラー' });
     }
-
-    if (content.length > 100) {
-        return res.status(400).json({ error: 'メッセージは100文字以内で入力してください。' });
-    }
-
-    const { error } = await supabase.from('messages').insert([{ sender_id, content }]);
-    if (error) {
-        return res.status(500).json({ error: error.message });
-    }
-    res.status(200).json({ message: 'Message posted successfully' });
 });
 
 // 全メッセージ取得用API
 app.get('/api/get-all-messages', async (req, res) => {
-    const { data, error } = await supabase.from('messages').select('*').order('created_at', { ascending: true });
-    if (error) {
-        return res.status(500).json({ error: error.message });
+    try {
+        const { data, error } = await supabase.from('messages').select('*').order('created_at', { ascending: true });
+        if (error) {
+            console.error('Supabase DB fetch error:', error);
+            return res.status(500).json({ error: 'Failed to fetch messages from database.' });
+        }
+        res.status(200).json({ data });
+    } catch (err) {
+        console.error('Server error in /api/get-all-messages:', err);
+        res.status(500).json({ error: 'サーバーエラー' });
     }
-    res.status(200).json({ data });
 });
 
 // 新しいメッセージ取得用API
 app.get('/api/get-new-messages', async (req, res) => {
-    const lastMessageId = parseInt(req.query.lastMessageId);
-    if (isNaN(lastMessageId)) {
-        return res.status(400).json({ error: 'Invalid lastMessageId' });
+    try {
+        const lastMessageId = parseInt(req.query.lastMessageId);
+        if (isNaN(lastMessageId)) {
+            return res.status(400).json({ error: 'Invalid lastMessageId' });
+        }
+        const { data, error } = await supabase.from('messages').select('*').gt('id', lastMessageId).order('created_at', { ascending: true });
+        if (error) {
+            console.error('Supabase DB fetch error:', error);
+            return res.status(500).json({ error: 'Failed to fetch new messages from database.' });
+        }
+        res.status(200).json({ data });
+    } catch (err) {
+        console.error('Server error in /api/get-new-messages:', err);
+        res.status(500).json({ error: 'サーバーエラー' });
     }
-    const { data, error } = await supabase.from('messages').select('*').gt('id', lastMessageId).order('created_at', { ascending: true });
-    if (error) {
-        return res.status(500).json({ error: error.message });
-    }
-    res.status(200).json({ data });
 });
 
 // 名前重複チェック用API
 app.post('/api/check-name', async (req, res) => {
-    const { name } = req.body;
-    
-    if (!name || name.length > 15) {
-        return res.status(400).json({ error: '名前は15文字以内で入力してください。' });
+    try {
+        const { name } = req.body;
+        if (!name || name.length > 15) {
+            return res.status(400).json({ error: '名前は15文字以内で入力してください。' });
+        }
+        const { data, error } = await supabase.from('messages').select('sender_id').eq('sender_id', name).limit(1);
+        if (error) {
+            console.error('Supabase DB check-name error:', error);
+            return res.status(500).json({ error: 'Failed to check name in database.' });
+        }
+        res.status(200).json({ exists: data.length > 0 });
+    } catch (err) {
+        console.error('Server error in /api/check-name:', err);
+        res.status(500).json({ error: 'サーバーエラー' });
     }
-
-    const { data, error } = await supabase.from('messages').select('sender_id').eq('sender_id', name).limit(1);
-    if (error) {
-        return res.status(500).json({ error: error.message });
-    }
-    res.status(200).json({ exists: data.length > 0 });
 });
 
 // メッセージクリア用API
 app.post('/api/clear-messages', async (req, res) => {
-    const { password } = req.body;
     try {
+        const { password } = req.body;
         const { data, error } = await supabaseAdmin.from('passwords').select('value').eq('id', 'clear_password').single();
-        if (error || data.value !== password) {
+        if (error || !data || data.value !== password) {
             return res.status(401).json({ error: 'パスワードが違います' });
         }
         const { error: deleteError } = await supabaseAdmin.from('messages').delete().gt('id', 0);
         if (deleteError) {
+            console.error('Supabase DB clear-messages error:', deleteError);
             return res.status(500).json({ error: 'メッセージの削除に失敗しました' });
         }
         res.status(200).json({ message: 'メッセージをすべて削除しました' });
-    } catch (error) {
+    } catch (err) {
+        console.error('Server error in /api/clear-messages:', err);
         res.status(500).json({ error: 'サーバーエラー' });
     }
 });
 
 // cleanup-files API
 app.post('/api/cleanup-files', async (req, res) => {
-    const { data: files, error } = await supabaseAdmin.storage.from('uploads').list();
-    if (error) {
-        return res.status(500).json({ error: 'ファイルリストの取得に失敗しました' });
-    }
-    const now = new Date();
-    const toDelete = [];
-    const MAX_FILES = 25;
-
-    if (files.length > MAX_FILES) {
-        files.forEach(file => {
-            if (file.name !== '.emptyFolderPlaceholder') {
-                toDelete.push(file.name);
-            }
-        });
-    } else {
-        const EXPIRATION_TIME = 24 * 60 * 60 * 1000;
-        files.forEach(file => {
-            const fileTime = new Date(file.created_at);
-            if ((now - fileTime) > EXPIRATION_TIME && file.name !== '.emptyFolderPlaceholder') {
-                toDelete.push(file.name);
-            }
-        });
-    }
-
-    if (toDelete.length > 0) {
-        const { error: deleteError } = await supabaseAdmin.storage.from('uploads').remove(toDelete);
-        if (deleteError) {
-            return res.status(500).json({ error: 'ファイルの削除に失敗しました' });
+    try {
+        const { data: files, error } = await supabaseAdmin.storage.from('uploads').list();
+        if (error) {
+            console.error('Supabase Storage list error:', error);
+            return res.status(500).json({ error: 'ファイルリストの取得に失敗しました' });
         }
+        
+        const now = new Date();
+        const toDelete = [];
+        const MAX_FILES = 25;
+
+        if (files.length > MAX_FILES) {
+            files.forEach(file => {
+                if (file.name !== '.emptyFolderPlaceholder') {
+                    toDelete.push(file.name);
+                }
+            });
+        } else {
+            const EXPIRATION_TIME = 24 * 60 * 60 * 1000;
+            files.forEach(file => {
+                const fileTime = new Date(file.created_at);
+                if ((now - fileTime) > EXPIRATION_TIME && file.name !== '.emptyFolderPlaceholder') {
+                    toDelete.push(file.name);
+                }
+            });
+        }
+
+        if (toDelete.length > 0) {
+            const { error: deleteError } = await supabaseAdmin.storage.from('uploads').remove(toDelete);
+            if (deleteError) {
+                console.error('Supabase Storage cleanup error:', deleteError);
+                return res.status(500).json({ error: 'ファイルの削除に失敗しました' });
+            }
+        }
+        res.status(200).json({ message: '古いファイルを削除しました' });
+    } catch (err) {
+        console.error('Server error in /api/cleanup-files:', err);
+        res.status(500).json({ error: 'サーバーエラー' });
     }
-    res.status(200).json({ message: '古いファイルを削除しました' });
 });
 
 
 // ファイルアップロード用のAPI
 app.post('/api/upload-file', upload.single('file'), async (req, res) => {
-    const { senderId, senderName } = req.body;
-    const file = req.file;
-
-    if (!file || !senderId) {
-        return res.status(400).json({ error: 'File and sender ID are required.' });
-    }
-
-    const displayName = senderName || senderId;
-    
-    // サーバーサイドでの名前の文字数チェック
-    if (displayName.length > 15) {
-        return res.status(400).json({ error: '名前は15文字以内で入力してください。' });
-    }
-
+    // ★ try...catch で全体を囲み、処理の失敗を確実にハンドリングする ★
     try {
-        const fileContent = await fs.readFile(file.path);
-        const fileName = `${Date.now()}-${file.originalname}`;
+        const { senderId, senderName } = req.body;
+        const file = req.file;
+
+        if (!file || !senderId) {
+            // ★ ファイルが選択されていない場合に一時ファイルを削除する ★
+            if (file) {
+                await fs.unlink(file.path).catch(err => console.error('Failed to unlink file:', err));
+            }
+            return res.status(400).json({ error: 'File and sender ID are required.' });
+        }
+
+        const displayName = senderName || senderId;
+        if (displayName.length > 15) {
+             await fs.unlink(file.path).catch(err => console.error('Failed to unlink file:', err));
+             return res.status(400).json({ error: '名前は15文字以内で入力してください。' });
+        }
+
+        const fileExtension = path.extname(file.originalname);
+        const fileName = `${Date.now()}-${displayName}${fileExtension}`;
 
         const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
             .from('uploads')
-            .upload(fileName, fileContent, {
-                contentType: file.mimetype
+            .upload(fileName, await fs.readFile(file.path), {
+                contentType: file.mimetype,
             });
 
-        await fs.unlink(file.path);
+        // ★ 一時ファイルの削除を確実に行う ★
+        await fs.unlink(file.path).catch(err => console.error('Failed to unlink file:', err));
 
         if (uploadError) {
             console.error('Supabase Storage upload error:', uploadError);
@@ -181,9 +225,9 @@ app.post('/api/upload-file', upload.single('file'), async (req, res) => {
         const publicUrl = publicUrlData.publicUrl;
         const finalContent = `ファイルがアップロードされました: <a href="${publicUrl}" target="_blank" class="uploaded-file">${file.originalname}</a>`;
 
-        // サーバーサイドでのファイル名に付随するメッセージの文字数チェック
         if (finalContent.length > 100) {
-             await supabaseAdmin.storage.from('uploads').remove([fileName]); // 長すぎる場合はアップロードしたファイルを削除
+             // 長すぎる場合はアップロードしたファイルを削除
+             await supabaseAdmin.storage.from('uploads').remove([fileName]).catch(err => console.error('Failed to remove uploaded file:', err));
              return res.status(400).json({ error: 'ファイル名が長すぎるため、メッセージが100文字を超えます。' });
         }
 
@@ -191,6 +235,8 @@ app.post('/api/upload-file', upload.single('file'), async (req, res) => {
 
         if (insertError) {
             console.error('Supabase DB insert error:', insertError);
+            // ★ データベースへの投稿が失敗した場合、アップロードしたファイルを削除してクリーンアップする ★
+            await supabaseAdmin.storage.from('uploads').remove([fileName]).catch(err => console.error('Failed to remove uploaded file:', err));
             return res.status(500).json({ error: 'Failed to post message to database.' });
         }
 
