@@ -408,8 +408,7 @@
                 const sender = myName || myId;
                 const { error } = await supabaseClient
                     .from('messages')
-                    .insert({ sender_id: sender, content: fullCommand });
-
+                    .insert({ sender_id: sender, content: fullCommand, my_id: myId }); // my_idを追加
                 if (error) {
                     print(`投稿に失敗しました: ${error.message}`, 'system');
                 }
@@ -520,7 +519,7 @@
         loadUserInfo();
         initializeSupabase();
         cleanupOldFiles();
-        setInterval(cleanupOldFiles, 30 * 60 * 1000); // 30分ごとに定期的にクリーンアップを実行
+        setInterval(cleanupOldFiles, 30 * 60 * 1000);
     </script>
 </body>
 </html>
