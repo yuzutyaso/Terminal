@@ -408,7 +408,7 @@
                 const sender = myName || myId;
                 const { error } = await supabaseClient
                     .from('messages')
-                    .insert({ sender_id: sender, content: fullCommand, my_id: myId }); // my_idを追加
+                    .insert({ sender_id: sender, content: fullCommand });
                 if (error) {
                     print(`投稿に失敗しました: ${error.message}`, 'system');
                 }
@@ -440,9 +440,20 @@
                 case '/name':
                     if (args.length > 0) {
                         const newName = args.join(' ');
-                        myName = newName;
-                        setCookie('myTerminalName', myName, 365);
-                        print(`名前が'${myName}'に変更されました。`, 'system');
+
+                        const { data, error } = await supabaseClient
+                            .from('messages')
+                            .select('sender_id')
+                            .eq('sender_id', newName)
+                            .limit(1);
+                        
+                        if (data && data.length > 0) {
+                            print(`名前'${newName}'はすでに使われています。別の名前を選んでください。`, 'system');
+                        } else {
+                            myName = newName;
+                            setCookie('myTerminalName', myName, 365);
+                            print(`名前が'${myName}'に変更されました。`, 'system');
+                        }
                     } else {
                         print("使用方法: /name [新しい名前]", 'system');
                     }
