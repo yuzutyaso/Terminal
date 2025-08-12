@@ -1,12 +1,12 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 import sqlite3
 from datetime import datetime
 
-app = Flask(__name__)
+# publicフォルダをテンプレートフォルダとして指定
+app = Flask(__name__, template_folder='public')
 
 # インメモリデータベースの設定
 def get_db_connection():
-    # check_same_thread=False は、マルチスレッド環境での問題を避けるため
     conn = sqlite3.connect(':memory:', check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
@@ -28,6 +28,11 @@ def init_db():
 
 # サーバー起動時にデータベースを初期化
 init_db()
+
+# ルートURL (/) にアクセスしたときにindex.htmlを返す
+@app.route('/')
+def index():
+    return render_template('index.html')
 
 @app.route('/api/post-message', methods=['POST'])
 def post_message():
