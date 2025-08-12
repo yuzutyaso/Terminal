@@ -3,13 +3,115 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Terminal</title>
-    <link rel="stylesheet" href="style.css">
+    <title>みんなのリアルタイム掲示板</title>
+    <style>
+        body {
+            background-color: #2d2d2d;
+            color: #ffffff;
+            font-family: 'monospace', 'Courier New', Courier;
+            font-size: 16px;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+        }
+
+        #app-container {
+            position: relative;
+        }
+
+        #terminal-view {
+            display: block;
+        }
+
+        #terminal {
+            width: 100%;
+            height: 90vh;
+            overflow-y: scroll;
+            border: 1px solid #555;
+            padding: 15px;
+            box-sizing: border-box;
+            background-color: #1a1a1a;
+            border-radius: 8px;
+        }
+
+        .line {
+            display: flex;
+        }
+
+        .prompt {
+            color: #a9ffb4;
+            margin-right: 8px;
+            font-weight: bold;
+        }
+
+        .input-area {
+            display: flex;
+            align-items: center;
+            margin-top: 10px;
+        }
+
+        #command-line {
+            background-color: transparent;
+            border: none;
+            color: #ffffff;
+            font-family: inherit;
+            font-size: inherit;
+            outline: none;
+            width: 100%;
+        }
+
+        ::-webkit-scrollbar {
+            width: 10px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #2d2d2d;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #6c6c6c;
+            border-radius: 5px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #888;
+        }
+
+        .message {
+            color: #dcdcdc;
+        }
+
+        .my-message {
+            color: #98c3ff;
+            margin-left: 20px;
+        }
+
+        .other-message {
+            color: #ffad87;
+        }
+
+        .system {
+            color: #d1b464;
+            font-weight: bold;
+        }
+
+        .timestamp {
+            font-size: 0.8em;
+            color: #888;
+            margin-left: 8px;
+        }
+
+        .uploaded-file {
+            color: #569cd6;
+            text-decoration: underline;
+        }
+    </style>
 </head>
 <body>
     <div id="app-container">
         <div id="terminal-view">
-            <div id="terminal">                
+            <div id="terminal">
+                <div>ようこそ！</div>
                 <div>掲示板に接続し、10秒ごとに自動更新を開始しました。</div>
                 <div>'help'でコマンドを確認できます。</div>
                 <br>
@@ -22,6 +124,487 @@
         </div>
     </div>
     <input type="file" id="file-input" style="display: none;">
-    <script src="script.js"></script>
+
+    <script>
+        const terminal = document.getElementById('terminal');
+        const commandLine = document.getElementById('command-line');
+        const fileInput = document.getElementById('file-input');
+
+        let myId = '';
+        let myName = '';
+        let isConnected = false;
+        let updateInterval = null;
+        let lastMessageId = 0;
+        const EXPIRATION_TIME = 24 * 60 * 60 * 1000;
+
+        async function initialize() {
+            print("クライアントはサーバー経由で通信します。", 'system');
+            loadUserInfo();
+            await connectToBoard();
+            setInterval(cleanupOldFiles, 30 * 60 * 1000);
+        }
+
+        async function connectToBoard() {
+            if (isConnected) {
+                print("すでに掲示板に接続しています。", 'system');
+                return;
+            }
+
+            print("掲示板に接続中...", 'system');
+            await fetchAllMessages();
+            isConnected = true;
+            setCookie('isConnected', 'true', 365);
+            print("掲示板に接続しました。メッセージを投稿できます。", 'system');
+            startUpdating();
+        }
+
+        async function fetchAllMessages() {
+            try {
+                const response = await fetch('/api/get-all-messages');
+                if (!response.ok) throw new Error('メッセージの取得に失敗しました');
+                const { data } = await response.json();
+
+                if (data.length > 0) {
+                    data.forEach(msg => {
+                        displayMessage(msg.id, msg.sender_id, msg.content, msg.created_at);
+                    });
+                    lastMessageId = data[data.length - 1].id;
+                }
+            } catch (error) {
+                print(`メッセージの取得に失敗しました: ${error.message}`, 'system');
+            }
+        }
+
+        async function fetchNewMessages() {
+            if (!isConnected) return;
+            try {
+                const response = await fetch(`/api/get-new-messages?lastMessageId=${lastMessageId}`);
+                if (!response.ok) throw new Error('新しいメッセージの取得に失敗しました');
+                const { data } = await response.json();
+
+                if (data.length > 0) {
+                    data.forEach(msg => {
+                        displayMessage(msg.id, msg.sender_id, msg.content, msg.created_at);
+                    });
+                    lastMessageId = data[data.length - 1].id;
+                }
+            } catch (error) {
+                print(`新しいメッセージの取得に失敗しました: ${error.message}`, 'system');
+            }
+        }
+
+        function startUpdating() {
+            if (updateInterval) clearInterval(updateInterval);
+            updateInterval = setInterval(fetchNewMessages, 10000);
+        }
+
+        function stopUpdating() {
+            if (updateInterval) {
+                clearInterval(updateInterval);
+                updateInterval = null;
+            }
+        }
+
+        function formatTimestamp(timestamp) {
+            const date = new Date(timestamp);
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const seconds = String(date.getSeconds()).padStart(2, '0');
+            return `${hours}:${minutes}:${seconds}`;
+        }
+
+        function displayMessage(id, sender, content, timestamp = null) {
+            const isMyMessage = sender === myName || sender === myId;
+            const displayName = sender;
+            const className = isMyMessage ? 'my-message' : 'other-message';
+
+            let messageHtml = `[${id}] [${displayName}] ${content}`;
+            if (timestamp) {
+                const formattedTime = formatTimestamp(timestamp);
+                messageHtml += `<span class="timestamp">${formattedTime}</span>`;
+            }
+            print(messageHtml, className);
+        }
+
+        function print(message, className = 'message') {
+            const newLine = document.createElement('div');
+            newLine.className = className;
+            newLine.innerHTML = message;
+            terminal.appendChild(newLine);
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        function getCookie(name) {
+            const nameEQ = name + "=";
+            const ca = document.cookie.split(';');
+            for(let i=0; i < ca.length; i++) {
+                let c = ca[i];
+                while (c.charAt(0)==' ') c = c.substring(1,c.length);
+                if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length,c.length);
+            }
+            return null;
+        }
+
+        function setCookie(name, value, days) {
+            let expires = "";
+            if (days) {
+                const date = new Date();
+                date.setTime(date.getTime() + (days*24*60*60*1000));
+                expires = "; expires=" + date.toUTCString();
+            }
+            document.cookie = name + "=" + (value || "")  + expires + "; path=/";
+        }
+
+        function generateRandomId() {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            let result = '';
+            for (let i = 0; i < 6; i++) {
+                result += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return result;
+        }
+
+        async function loadUserInfo() {
+            const idCookie = getCookie('myTerminalId');
+            const nameCookie = getCookie('myTerminalName');
+
+            if (idCookie) {
+                myId = idCookie;
+                print(`あなたのID: ${myId}`);
+            } else {
+                myId = generateRandomId();
+                setCookie('myTerminalId', myId, 365);
+                print(`新しいIDが生成されました: ${myId}`, 'system');
+            }
+
+            if (nameCookie) {
+                myName = nameCookie;
+                print(`あなたの名前: ${myName}`);
+            } else {
+                myName = '';
+            }
+        }
+
+        async function cleanupOldFiles() {
+            try {
+                const response = await fetch('/api/cleanup-files', { method: 'POST' });
+                if (response.ok) {
+                    print("古いファイルを削除しました。", 'system');
+                } else {
+                    const errorData = await response.json();
+                    print(`古いファイルの削除に失敗しました: ${errorData.error}`, 'system');
+                }
+            } catch (error) {
+                print(`古いファイルの削除に失敗しました: ${error.message}`, 'system');
+            }
+        }
+
+        fileInput.addEventListener('change', async function(event) {
+            const file = event.target.files[0];
+            if (!file) {
+                print("ファイルが選択されませんでした。", 'system');
+                return;
+            }
+
+            await cleanupOldFiles();
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('senderId', myId);
+            formData.append('senderName', myName);
+
+            print(`ファイル ${file.name} をアップロードしています...`, 'system');
+
+            try {
+                const response = await fetch('/api/upload-file', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    print(`ファイル ${file.name} をアップロードしました。`, 'system');
+                } else {
+                    print(`ファイルのアップロードに失敗しました: ${result.error}`, 'system');
+                }
+            } catch (error) {
+                print(`ファイルのアップロード中にエラーが発生しました: ${error.message}`, 'system');
+            }
+
+            fileInput.value = '';
+            commandLine.focus();
+        });
+
+        commandLine.addEventListener('keydown', async function(event) {
+            if (event.key === 'Enter') {
+                const command = commandLine.value.trim();
+                const displayNameForPrompt = myName || myId || 'Anonymous';
+                print(`<div class="line"><span class="prompt">$ ${displayNameForPrompt}: </span><div>${command}</div></div>`);
+                await handleCommand(command);
+                commandLine.value = '';
+            }
+        });
+
+        async function handleCommand(command) {
+            const parts = command.split(' ');
+            const mainCommand = parts[0].toLowerCase();
+            const args = parts.slice(1);
+            const fullCommand = command;
+
+            if (mainCommand === '/ban' && args.length >= 2 && args[1].toLowerCase() === 'release') {
+                if (myName !== 'ゆず') {
+                    print("このコマンドを実行する権限がありません。", 'system');
+                    return;
+                }
+                const userIdToUnban = args[0];
+                try {
+                    const response = await fetch('/api/release-ban', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ senderName: myName, userIdToUnban })
+                    });
+                    const result = await response.json();
+                    if (response.ok) {
+                        print(result.message, 'system');
+                    } else {
+                        print(`BANの解除に失敗しました: ${result.error}`, 'system');
+                    }
+                } catch (error) {
+                    print(`BANの解除中にエラーが発生しました: ${error.message}`, 'system');
+                }
+                return;
+            }
+
+            if (isConnected && myId && fullCommand && !mainCommand.startsWith('/')) {
+                const sender = myName || myId;
+                const sanitizedContent = fullCommand.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+                if (sanitizedContent.length > 100) {
+                    print("メッセージは100文字以内で入力してください。", 'system');
+                    return;
+                }
+
+                try {
+                    const response = await fetch('/api/post-message', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ sender_id: sender, content: sanitizedContent })
+                    });
+                    const result = await response.json();
+
+                    if (response.ok) {
+                        displayMessage(result.id, sender, sanitizedContent, new Date().toISOString());
+                    } else {
+                        print(`投稿に失敗しました: ${result.error}`, 'system');
+                    }
+                } catch (error) {
+                    print(`投稿中にエラーが発生しました: ${error.message}`, 'system');
+                }
+                return;
+            }
+
+            switch (mainCommand) {
+                case 'help':
+                    print("利用可能なコマンド:");
+                    print("&nbsp;&nbsp;<b>/disconnect</b> - 掲示板から切断し、更新を停止します。");
+                    print("&nbsp;&nbsp;<b>/id</b>         - あなたのIDと名前を表示します。");
+                    print("&nbsp;&nbsp;<b>/name</b> [新しい名前] - 自分の名前を変更します。");
+                    print("&nbsp;&nbsp;<b>/clear</b>      - データベースのメッセージをすべて削除します。 (パスワードが必要です)");
+                    print("&nbsp;&nbsp;<b>/upload</b>     - ファイルをアップロードします。");
+                    print("&nbsp;&nbsp;<b>/date</b>       - 現在の日本時間をBOTが投稿します。");
+                    print("&nbsp;&nbsp;<b>[メッセージ]</b> - 全員にメッセージを投稿します。");
+                    break;
+
+                case '/id':
+                    if (myId) {
+                        print(`あなたのID: ${myId}`, 'system');
+                        if (myName) {
+                            print(`現在の名前: ${myName}`, 'system');
+                        } else {
+                            print("名前はまだ設定されていません。", 'system');
+                        }
+                    }
+                    break;
+
+                case '/name':
+                    if (args.length > 0) {
+                        const newName = args.join(' ');
+                        if (newName.length > 15) {
+                            print("名前は15文字以内で入力してください。", 'system');
+                            return;
+                        }
+
+                        const response = await fetch('/api/check-name', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ name: newName })
+                        });
+                        const { exists } = await response.json();
+
+                        if (exists) {
+                            print(`名前'${newName}'はすでに使われています。別の名前を選んでください。`, 'system');
+                        } else {
+                            myName = newName;
+                            setCookie('myTerminalName', myName, 365);
+                            print(`名前が'${myName}'に変更されました。`, 'system');
+                        }
+                    } else {
+                        print("使用方法: /name [新しい名前]", 'system');
+                    }
+                    break;
+
+                case '/disconnect':
+                    if (isConnected) {
+                        isConnected = false;
+                        setCookie('isConnected', 'false', 365);
+                        print("掲示板から切断しました。", 'system');
+                        stopUpdating();
+                    } else {
+                        print("すでに切断されています。", 'system');
+                    }
+                    break;
+
+                case '/clear':
+                    const password = prompt("パスワードを入力してください:");
+                    if (password) {
+                        const response = await fetch('/api/clear-messages', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ password: password })
+                        });
+
+                        if (response.ok) {
+                            terminal.innerHTML = "<div>ようこそ！</div><div>掲示板に接続し、10秒ごとに自動更新を開始しました。</div><div>'help'でコマンドを確認できます。</div><br>";
+                            print("データベースのメッセージをすべて削除しました。", 'system');
+                            lastMessageId = 0;
+                            if (isConnected) {
+                                connectToBoard();
+                            }
+                        } else {
+                            const errorData = await response.json();
+                            print(`クリアに失敗しました: ${errorData.error}`, 'system');
+                        }
+                    } else {
+                         print("パスワードが入力されませんでした。", 'system');
+                    }
+                    break;
+
+                case '/upload':
+                    fileInput.click();
+                    break;
+
+                case 'date':
+                case '/date':
+                    try {
+                        const response = await fetch('/api/get-time', { method: 'POST' });
+                        if (!response.ok) {
+                            const errorData = await response.json();
+                            print(`BOTコマンドの実行に失敗しました: ${errorData.error}`, 'system');
+                        }
+                    } catch (error) {
+                        print(`BOTコマンドの実行中にエラーが発生しました: ${error.message}`, 'system');
+                    }
+                    break;
+
+                case '/ban':
+                    if (myName !== 'ゆず') {
+                        print("このコマンドを実行する権限がありません。", 'system');
+                        return;
+                    }
+                    if (args.length === 0) {
+                        print("使用方法: /ban [ID] (release)", 'system');
+                        return;
+                    }
+                    const userIdToBan = args[0];
+                    try {
+                        const response = await fetch('/api/ban-user', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ senderName: myName, userIdToBan })
+                        });
+
+                        const result = await response.json();
+
+                        if (response.ok) {
+                            print(result.message, 'system');
+                        } else {
+                            print(`ユーザーのBANに失敗しました: ${result.error}`, 'system');
+                        }
+                    } catch (error) {
+                        print(`ユーザーのBAN中にエラーが発生しました: ${error.message}`, 'system');
+                    }
+                    break;
+
+                case '/ip':
+                    if (myName !== 'ゆず') {
+                        print("このコマンドを実行する権限がありません。", 'system');
+                        return;
+                    }
+                    if (args.length === 0) {
+                        print("使用方法: /ip [ID]", 'system');
+                        return;
+                    }
+                    const userIdToFind = args[0];
+                    try {
+                        const response = await fetch('/api/get-ip', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ senderName: myName, userId: userIdToFind })
+                        });
+
+                        const result = await response.json();
+
+                                  if (!response.ok) {
+                             print(`IPアドレスの取得に失敗しました: ${result.error}`, 'system');
+                        }
+                    } catch (error) {
+                        print(`IPアドレスの取得中にエラーが発生しました: ${error.message}`, 'system');
+                    }
+                    break;
+
+                case '/ipban':
+                    if (myName !== 'ゆず') {
+                        print("このコマンドを実行する権限がありません。", 'system');
+                        return;
+                    }
+                    if (args.length === 0) {
+                        print("使用方法: /ipban [IPアドレス]", 'system');
+                        return;
+                    }
+                    const ipAddressToBan = args[0];
+                    try {
+                        const response = await fetch('/api/ip-ban', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ senderName: myName, ipAddressToBan })
+                        });
+
+                        const result = await response.json();
+
+                        if (response.ok) {
+                             print(result.message, 'system');
+                        } else {
+                            print(`IPアドレスのBANに失敗しました: ${result.error}`, 'system');
+                        }
+                    } catch (error) {
+                        print(`IPアドレスのBAN中にエラーが発生しました: ${error.message}`, 'system');
+                    }
+                    break;
+
+                default:
+                    if(fullCommand) {
+                        print(`コマンドが見つかりません: ${fullCommand}. 'help'で利用可能なコマンドを確認してください。`);
+                    }
+                    break;
+            }
+        }
+
+        document.body.addEventListener('click', function() {
+            commandLine.focus();
+        });
+
+        initialize();
+    </script>
 </body>
 </html>
