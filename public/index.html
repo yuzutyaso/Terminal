@@ -26,7 +26,6 @@
         }
 
         #messages-view, #terminal-view {
-            width: 50%;
             height: 100%;
             overflow-y: scroll;
             border: 1px solid #555;
@@ -35,20 +34,14 @@
             background-color: #1a1a1a;
             border-radius: 8px;
         }
-
-        #messages-view {
-            display: flex;
-            flex-direction: column;
-            height: calc(100vh - 80px); /* Adjust based on padding and input height */
-        }
         
-        #messages-container {
+        #messages-view {
             flex-grow: 1;
-            overflow-y: auto;
         }
 
         #terminal-view {
-            height: calc(100vh - 80px); /* Adjust based on padding and input height */
+            width: 50%;
+            display: none; /* 初期は非表示 */
         }
 
         #messages-view h2, #terminal-view h2 {
@@ -128,12 +121,41 @@
             color: #569cd6;
             text-decoration: underline;
         }
+
+        #settings-button {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            width: 40px;
+            height: 40px;
+            background-color: #555;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 24px;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #topic-bar {
+            background-color: #3a3a3a;
+            border-radius: 8px;
+            padding: 10px 15px;
+            margin-bottom: 15px;
+            text-align: center;
+            font-size: 1.5em; /* 大きく表示 */
+            font-weight: bold;
+            color: #e0e0e0;
+            border: 1px solid #666;
+        }
     </style>
 </head>
 <body>
     <div id="app-container">
         <div id="messages-view">
-            <h2>メッセージ</h2>
+            <div id="topic-bar"></div> <h2>メッセージ</h2>
             <div id="messages-container"></div>
         </div>
 
@@ -148,6 +170,8 @@
         </div>
     </div>
     
+    <button id="settings-button">⚙</button>
+
     <div class="input-area">
         <span class="prompt">$</span>
         <input type="text" id="command-line" autofocus maxlength="100">
@@ -157,9 +181,12 @@
 
     <script>
         const terminal = document.getElementById('terminal');
+        const terminalView = document.getElementById('terminal-view');
         const messagesContainer = document.getElementById('messages-container');
         const commandLine = document.getElementById('command-line');
         const fileInput = document.getElementById('file-input');
+        const settingsButton = document.getElementById('settings-button');
+        const topicBar = document.getElementById('topic-bar');
 
         let myId = '';
         let myName = '';
@@ -168,6 +195,19 @@
         let lastMessageId = 0;
         const EXPIRATION_TIME = 24 * 60 * 60 * 1000;
         let inappropriateWords = [];
+
+        settingsButton.addEventListener('click', () => {
+            if (terminalView.style.display === 'none') {
+                terminalView.style.display = 'block';
+            } else {
+                terminalView.style.display = 'none';
+            }
+        });
+
+        function loadTopic() {
+            const topic = localStorage.getItem('currentTopic');
+            topicBar.textContent = topic ? `現在の話題: ${topic}` : '現在の話題は未設定です';
+        }
 
         async function fetchInappropriateWords() {
             try {
@@ -187,6 +227,7 @@
         }
 
         async function initialize() {
+            loadTopic(); // Topicの読み込み
             printLog("クライアントはサーバー経由で通信します。", 'system');
             await fetchInappropriateWords();
             loadUserInfo();
@@ -410,9 +451,15 @@
 
         commandLine.addEventListener('keydown', async function(event) {
             if (event.key === 'Enter') {
-                const command = commandLine.value.trim();
+                let command = commandLine.value.trim();
                 const displayNameForPrompt = myName || myId || 'Anonymous';
                 printLog(`<div class="line"><span class="prompt">$ ${displayNameForPrompt}: </span><div>${command}</div></div>`);
+                
+                const canSkipSend = getCookie('canSkipSend') === 'true';
+                if (canSkipSend && command.length > 0 && command[0] !== '/') {
+                    command = `/send ${command}`;
+                }
+
                 await handleCommand(command);
                 commandLine.value = '';
             }
@@ -436,6 +483,20 @@
             }
 
             if (mainCommand === '/send' && args.length > 0) {
+                const subCommand = args[0].toLowerCase();
+                
+                if (subCommand === 'ok') {
+                    setCookie('canSkipSend', 'true', 365);
+                    printLog("メッセージ投稿時に'/send'コマンドを省略できるようになりました。", 'system');
+                    return;
+                }
+                
+                if (subCommand === 'no') {
+                    setCookie('canSkipSend', 'false', 365);
+                    printLog("メッセージ投稿時に'/send'コマンドを省略できなくなりました。", 'system');
+                    return;
+                }
+
                 const messageContent = args.join(' ');
                 const sender = myName || myId;
                 const sanitizedContent = messageContent.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/<script>/g, '');
@@ -469,18 +530,40 @@
                 case 'help':
                     printLog("利用可能なコマンド:");
                     printLog("&nbsp;&nbsp;<b>/send</b> [メッセージ] - 全員にメッセージを投稿します。");
+                    printLog("&nbsp;&nbsp;<b>/send ok</b> - メッセージ投稿時に'/send'を省略できるようになります。");
+                    printLog("&nbsp;&nbsp;<b>/send no</b> - メッセージ投稿時に'/send'を省略できなくなります。");
+                    printLog("&nbsp;&nbsp;<b>/topic</b> [新しい話題] - 現在の話題を設定します。(管理者のみ)");
                     printLog("&nbsp;&nbsp;<b>/disconnect</b> - 掲示板から切断し、更新を停止します。");
                     printLog("&nbsp;&nbsp;<b>/id</b>         - あなたのIDと名前を表示します。");
                     printLog("&nbsp;&nbsp;<b>/name</b> [新しい名前] - 自分の名前を変更します。");
                     printLog("&nbsp;&nbsp;<b>/clear</b>      - データベースのメッセージをすべて削除します。 (パスワードが必要です)");
                     printLog("&nbsp;&nbsp;<b>/upload</b>     - ファイルをアップロードします。");
                     printLog("&nbsp;&nbsp;<b>/date</b>       - 現在の日本時間をBOTが投稿します。");
+                    printLog("&nbsp;&nbsp;<b>/ban</b> [ID]   - 特定のユーザーIDをBANします。 (管理者のみ)");
+                    printLog("&nbsp;&nbsp;<b>/ip</b> [ID]    - 特定のIDのIPアドレスを取得します。 (管理者のみ)");
+                    printLog("&nbsp;&nbsp;<b>/ipban</b> [IP] - 特定のIPアドレスをBANします。 (管理者のみ)");
+                    printLog("&nbsp;&nbsp;<b>/release</b> [ID] - BANされたユーザーIDを解除します。 (管理者のみ)");
+                    break;
+                
+                case '/topic':
+                    if (myName !== 'ゆず') {
+                        printLog("このコマンドを実行する権限がありません。", 'system');
+                        return;
+                    }
+                    if (args.length > 0) {
+                        const newTopic = args.join(' ');
+                        localStorage.setItem('currentTopic', newTopic);
+                        loadTopic();
+                        printLog(`現在の話題を'${newTopic}'に設定しました。`, 'system');
+                    } else {
+                        printLog("使用方法: /topic [新しい話題]", 'system');
+                    }
                     break;
 
                 case '/id':
                     if (myId) {
                         printLog(`あなたのID: ${myId}`, 'system');
-                        if (myName) {
+                 if (myName) {
                             printLog(`現在の名前: ${myName}`, 'system');
                         } else {
                             printLog("名前はまだ設定されていません。", 'system');
@@ -551,7 +634,7 @@
                             printLog("データベースのメッセージをすべて削除しました。", 'system');
                             lastMessageId = 0;
                             if (isConnected) {
-                              connectToBoard();
+                                connectToBoard();
                             }
                         } else {
                             const errorData = await response.json();
@@ -585,7 +668,7 @@
                         return;
                     }
                     if (args.length === 0) {
-                        printLog("使用方法: /ban [ID] (release)", 'system');
+                        printLog("使用方法: /ban [ID]", 'system');
                         return;
                     }
                     const userIdToBan = args[0];
@@ -664,6 +747,35 @@
                     }
                     break;
 
+                case '/release':
+                    if (myName !== 'ゆず') {
+                        printLog("このコマンドを実行する権限がありません。", 'system');
+                        return;
+                    }
+                    if (args.length === 0) {
+                        printLog("使用方法: /release [ID]", 'system');
+                        return;
+                    }
+                    const userIdToUnban = args[0];
+                    try {
+                        const response = await fetch('/api/release-ban', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ senderName: myName, userIdToUnban })
+                        });
+
+                        const result = await response.json();
+
+                        if (response.ok) {
+                            printLog(result.message, 'system');
+                        } else {
+                            printLog(`BANの解除に失敗しました: ${result.error}`, 'system');
+                        }
+                    } catch (error) {
+                        printLog(`BANの解除中にエラーが発生しました: ${error.message}`, 'system');
+                    }
+                    break;
+
                 default:
                     if(fullCommand) {
                         printLog(`コマンドが見つかりません: ${fullCommand}. 'help'で利用可能なコマンドを確認してください。`, 'system');
@@ -680,8 +792,3 @@
     </script>
 </body>
 </html>
-
-
-
-
-
