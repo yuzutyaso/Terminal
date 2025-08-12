@@ -74,16 +74,6 @@ app.post('/api/post-message', async (req, res) => {
             return res.status(400).json({ error: 'sender_id and content are required' });
         }
 
-        // サーバーサイドでの不適切なワードチェック
-        if (containsInappropriateWords(content)) {
-            // 不適切なワードを検知した場合、即座にbanned_usersにIDを登録
-            const { error: banError } = await supabaseAdmin.from('banned_users').insert([{ user_id: sender_id }]);
-            if (banError && banError.code !== '23505') { // 23505はunique_violationエラー
-                console.error('Supabase DB ban-user error:', banError);
-            }
-            return res.status(403).json({ error: '不適切なワードを検知しました。IDをBANします。' });
-        }
-        
         const clientIp = getClientIp(req);
         if (clientIp) {
             const { data: ipBanData, error: ipBanError } = await supabase.from('banned_ips').select('ip_address').eq('ip_address', clientIp).limit(1);
@@ -101,6 +91,15 @@ app.post('/api/post-message', async (req, res) => {
         }
         if (bannedData && bannedData.length > 0) {
             return res.status(403).json({ error: 'あなたは投稿を禁止されています。' });
+        }
+
+        // 不適切なワードを検知した場合、即座にbanned_usersにIDを登録
+        if (containsInappropriateWords(content)) {
+            const { error: banError } = await supabaseAdmin.from('banned_users').insert([{ user_id: sender_id }]);
+            if (banError && banError.code !== '23505') { // 23505はunique_violationエラー
+                console.error('Supabase DB ban-user error:', banError);
+            }
+            return res.status(403).json({ error: '不適切なワードを検知しました。IDをBANします。' });
         }
         
         if (content.length > 100) {
