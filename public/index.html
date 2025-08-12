@@ -136,12 +136,32 @@
         let updateInterval = null;
         let lastMessageId = 0;
         const EXPIRATION_TIME = 24 * 60 * 60 * 1000;
+        let inappropriateWords = [];
+
+        async function fetchInappropriateWords() {
+            try {
+                const response = await fetch('/api/get-inappropriate-words');
+                if (!response.ok) throw new Error('不適切なワードリストの取得に失敗しました');
+                const { words } = await response.json();
+                inappropriateWords = words;
+                console.log('Inappropriate words fetched:', inappropriateWords);
+            } catch (error) {
+                console.error('Failed to fetch inappropriate words:', error);
+                inappropriateWords = [];
+            }
+        }
+
+        function containsInappropriateWords(text) {
+            return inappropriateWords.some(word => text.includes(word));
+        }
 
         async function initialize() {
             print("クライアントはサーバー経由で通信します。", 'system');
+            await fetchInappropriateWords();
             loadUserInfo();
             await connectToBoard();
             setInterval(cleanupOldFiles, 30 * 60 * 1000);
+            setInterval(fetchInappropriateWords, 30 * 60 * 1000);
         }
 
         async function connectToBoard() {
@@ -306,6 +326,17 @@
                 return;
             }
 
+            if (containsInappropriateWords(file.name)) {
+                print("BOT: 不適切なワードを検知しました。", 'system');
+                print(`BOT: 投稿者(${myName || myId})のIDをBANします。`, 'system');
+                await fetch('/api/ban-user', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userIdToBan: myName || myId })
+                });
+                return;
+            }
+
             await cleanupOldFiles();
 
             const formData = new FormData();
@@ -352,6 +383,17 @@
             const args = parts.slice(1);
             const fullCommand = command;
 
+            if (containsInappropriateWords(fullCommand)) {
+                print("BOT: 不適切なワードを検知しました。", 'system');
+                print(`BOT: 投稿者(${myName || myId})のIDをBANします。`, 'system');
+                await fetch('/api/ban-user', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userIdToBan: myName || myId })
+                });
+                return;
+            }
+
             if (mainCommand === '/ban' && args.length >= 2 && args[1].toLowerCase() === 'release') {
                 if (myName !== 'ゆず') {
                     print("このコマンドを実行する権限がありません。", 'system');
@@ -378,7 +420,7 @@
 
             if (isConnected && myId && fullCommand && !mainCommand.startsWith('/')) {
                 const sender = myName || myId;
-                const sanitizedContent = fullCommand.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                const sanitizedContent = fullCommand.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/<script>/g, '');
 
                 if (sanitizedContent.length > 100) {
                     print("メッセージは100文字以内で入力してください。", 'system');
@@ -430,6 +472,16 @@
                 case '/name':
                     if (args.length > 0) {
                         const newName = args.join(' ');
+                        if (containsInappropriateWords(newName)) {
+                            print("BOT: 不適切なワードを検知しました。", 'system');
+                            print(`BOT: 投稿者(${myName || myId})のIDをBANします。`, 'system');
+                            await fetch('/api/ban-user', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ userIdToBan: myName || myId })
+                            });
+                            return;
+                        }
                         if (newName.length > 15) {
                             print("名前は15文字以内で入力してください。", 'system');
                             return;
@@ -498,7 +550,7 @@
                 case '/date':
                     try {
                         const response = await fetch('/api/get-time', { method: 'POST' });
-                        if (!response.ok) {
+   if (!response.ok) {
                             const errorData = await response.json();
                             print(`BOTコマンドの実行に失敗しました: ${errorData.error}`, 'system');
                         }
@@ -555,7 +607,7 @@
 
                         const result = await response.json();
 
-                                  if (!response.ok) {
+                        if (!response.ok) {
                              print(`IPアドレスの取得に失敗しました: ${result.error}`, 'system');
                         }
                     } catch (error) {
