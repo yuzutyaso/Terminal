@@ -12,10 +12,9 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
-// 環境変数が設定されていない場合にアプリを終了する
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_KEY) {
     console.error('致命的なエラー: 環境変数が設定されていません。VercelのダッシュボードでSupabaseのキーを設定してください。');
-    process.exit(1); // アプリケーションを終了して、Vercelのログにエラーを記録する
+    process.exit(1);
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -80,7 +79,6 @@ app.post('/api/post-message', async (req, res) => {
         const { data, error } = await supabase.from('messages').insert([{ sender_id, content, ip_address: clientIp }]).select();
         if (error) {
             console.error('Supabase DB insert error:', error);
-            // エラーの詳細をクライアントに返す
             return res.status(500).json({ error: 'Failed to post message to database.', details: error.message });
         }
         res.status(200).json({ message: 'Message posted successfully', id: data[0].id });
@@ -147,11 +145,14 @@ app.post('/api/clear-messages', async (req, res) => {
         if (error || !data || data.value !== password) {
             return res.status(401).json({ error: 'パスワードが違います' });
         }
-        const { error: deleteError } = await supabaseAdmin.from('messages').delete().gt('id', 0);
-        if (deleteError) {
-            console.error('Supabase DB clear-messages error:', deleteError);
+        
+        // TRUNCATE TABLEにRESTART IDENTITYを追加
+        const { error: truncateError } = await supabaseAdmin.rpc('truncate_table', { table_name: 'messages' });
+        if (truncateError) {
+             console.error('Supabase DB truncate error:', truncateError);
             return res.status(500).json({ error: 'メッセージの削除に失敗しました' });
         }
+        
         res.status(200).json({ message: 'メッセージをすべて削除しました' });
     } catch (err) {
         console.error('Server error in /api/clear-messages:', err);
