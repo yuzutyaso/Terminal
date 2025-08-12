@@ -8,14 +8,14 @@ const fs = require('fs/promises');
 
 const app = express();
 
-// 環境変数の設定 (Vercelで設定する)
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
+// 環境変数が設定されていない場合にアプリを終了する
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_KEY) {
-    console.error('環境変数が設定されていません。VercelのダッシュボードでSUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_KEYを設定してください。');
-    process.exit(1);
+    console.error('致命的なエラー: 環境変数が設定されていません。VercelのダッシュボードでSupabaseのキーを設定してください。');
+    process.exit(1); // アプリケーションを終了して、Vercelのログにエラーを記録する
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -24,7 +24,6 @@ const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 app.use(cors());
 app.use(bodyParser.json());
 
-// 静的ファイルの配信設定
 app.use(express.static('public'));
 
 const UPLOAD_DIR = '/tmp/uploads/';
@@ -81,7 +80,8 @@ app.post('/api/post-message', async (req, res) => {
         const { data, error } = await supabase.from('messages').insert([{ sender_id, content, ip_address: clientIp }]).select();
         if (error) {
             console.error('Supabase DB insert error:', error);
-            return res.status(500).json({ error: 'Failed to post message to database.' });
+            // エラーの詳細をクライアントに返す
+            return res.status(500).json({ error: 'Failed to post message to database.', details: error.message });
         }
         res.status(200).json({ message: 'Message posted successfully', id: data[0].id });
     } catch (err) {
@@ -200,6 +200,7 @@ app.post('/api/cleanup-files', async (req, res) => {
         res.status(500).json({ error: 'サーバーエラー' });
     }
 });
+
 
 app.post('/api/upload-file', upload.single('file'), async (req, res) => {
     try {
