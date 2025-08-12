@@ -13,25 +13,48 @@
             line-height: 1.6;
             margin: 0;
             padding: 20px;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            box-sizing: border-box;
         }
 
         #app-container {
-            position: relative;
+            display: flex;
+            flex-grow: 1;
+            gap: 20px;
         }
 
-        #terminal-view {
-            display: block;
-        }
-
-        #terminal {
-            width: 100%;
-            height: 90vh;
+        #messages-view, #terminal-view {
+            width: 50%;
+            height: 100%;
             overflow-y: scroll;
             border: 1px solid #555;
             padding: 15px;
             box-sizing: border-box;
             background-color: #1a1a1a;
             border-radius: 8px;
+        }
+
+        #messages-view {
+            display: flex;
+            flex-direction: column;
+            height: calc(100vh - 80px); /* Adjust based on padding and input height */
+        }
+        
+        #messages-container {
+            flex-grow: 1;
+            overflow-y: auto;
+        }
+
+        #terminal-view {
+            height: calc(100vh - 80px); /* Adjust based on padding and input height */
+        }
+
+        #messages-view h2, #terminal-view h2 {
+            margin-top: 0;
+            border-bottom: 1px solid #555;
+            padding-bottom: 10px;
         }
 
         .line {
@@ -47,7 +70,7 @@
         .input-area {
             display: flex;
             align-items: center;
-            margin-top: 10px;
+            margin-top: 20px;
         }
 
         #command-line {
@@ -109,24 +132,32 @@
 </head>
 <body>
     <div id="app-container">
+        <div id="messages-view">
+            <h2>メッセージ</h2>
+            <div id="messages-container"></div>
+        </div>
+
         <div id="terminal-view">
+            <h2>ログ・コマンド</h2>
             <div id="terminal">
                 <div>ようこそ！</div>
                 <div>掲示板に接続し、10秒ごとに自動更新を開始しました。</div>
                 <div>'help'でコマンドを確認できます。</div>
                 <br>
             </div>
-            
-            <div class="input-area">
-                <span class="prompt">$</span>
-                <input type="text" id="command-line" autofocus maxlength="100">
-            </div>
         </div>
     </div>
+    
+    <div class="input-area">
+        <span class="prompt">$</span>
+        <input type="text" id="command-line" autofocus maxlength="100">
+    </div>
+
     <input type="file" id="file-input" style="display: none;">
 
     <script>
         const terminal = document.getElementById('terminal');
+        const messagesContainer = document.getElementById('messages-container');
         const commandLine = document.getElementById('command-line');
         const fileInput = document.getElementById('file-input');
 
@@ -156,7 +187,7 @@
         }
 
         async function initialize() {
-            print("クライアントはサーバー経由で通信します。", 'system');
+            printLog("クライアントはサーバー経由で通信します。", 'system');
             await fetchInappropriateWords();
             loadUserInfo();
             await connectToBoard();
@@ -166,15 +197,15 @@
 
         async function connectToBoard() {
             if (isConnected) {
-                print("すでに掲示板に接続しています。", 'system');
+                printLog("すでに掲示板に接続しています。", 'system');
                 return;
             }
 
-            print("掲示板に接続中...", 'system');
+            printLog("掲示板に接続中...", 'system');
             await fetchAllMessages();
             isConnected = true;
             setCookie('isConnected', 'true', 365);
-            print("掲示板に接続しました。メッセージを投稿できます。", 'system');
+            printLog("掲示板に接続しました。メッセージを投稿できます。", 'system');
             startUpdating();
         }
 
@@ -183,7 +214,7 @@
                 const response = await fetch('/api/get-all-messages');
                 if (!response.ok) throw new Error('メッセージの取得に失敗しました');
                 const { data } = await response.json();
-
+                messagesContainer.innerHTML = '';
                 if (data.length > 0) {
                     data.forEach(msg => {
                         displayMessage(msg.id, msg.sender_id, msg.content, msg.created_at);
@@ -191,7 +222,7 @@
                     lastMessageId = data[data.length - 1].id;
                 }
             } catch (error) {
-                print(`メッセージの取得に失敗しました: ${error.message}`, 'system');
+                printLog(`メッセージの取得に失敗しました: ${error.message}`, 'system');
             }
         }
 
@@ -204,7 +235,6 @@
 
                 if (data.length > 0) {
                     data.forEach(msg => {
-                        // 重複表示を防ぐため、既に表示されているメッセージはスキップ
                         const existingMessage = document.querySelector(`.message[data-id="${msg.id}"]`);
                         if (!existingMessage) {
                              displayMessage(msg.id, msg.sender_id, msg.content, msg.created_at);
@@ -213,7 +243,7 @@
                     lastMessageId = data[data.length - 1].id;
                 }
             } catch (error) {
-                print(`新しいメッセージの取得に失敗しました: ${error.message}`, 'system');
+                printLog(`新しいメッセージの取得に失敗しました: ${error.message}`, 'system');
             }
         }
 
@@ -251,11 +281,11 @@
             newLine.className = className + ' message';
             newLine.innerHTML = messageHtml;
             newLine.dataset.id = id;
-            terminal.appendChild(newLine);
-            terminal.scrollTop = terminal.scrollHeight;
+            messagesContainer.appendChild(newLine);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
 
-        function print(message, className = 'message') {
+        function printLog(message, className = 'message') {
             const newLine = document.createElement('div');
             newLine.className = className;
             newLine.innerHTML = message;
@@ -299,16 +329,16 @@
 
             if (idCookie) {
                 myId = idCookie;
-                print(`あなたのID: ${myId}`);
+                printLog(`あなたのID: ${myId}`);
             } else {
                 myId = generateRandomId();
                 setCookie('myTerminalId', myId, 365);
-                print(`新しいIDが生成されました: ${myId}`, 'system');
+                printLog(`新しいIDが生成されました: ${myId}`, 'system');
             }
 
             if (nameCookie) {
                 myName = nameCookie;
-                print(`あなたの名前: ${myName}`);
+                printLog(`あなたの名前: ${myName}`);
             } else {
                 myName = '';
             }
@@ -318,30 +348,32 @@
             try {
                 const response = await fetch('/api/cleanup-files', { method: 'POST' });
                 if (response.ok) {
-                    print("古いファイルを削除しました。", 'system');
+                    printLog("古いファイルを削除しました。", 'system');
                 } else {
                     const errorData = await response.json();
-                    print(`古いファイルの削除に失敗しました: ${errorData.error}`, 'system');
+                    printLog(`古いファイルの削除に失敗しました: ${errorData.error}`, 'system');
                 }
             } catch (error) {
-                print(`古いファイルの削除に失敗しました: ${error.message}`, 'system');
+                printLog(`古いファイルの削除に失敗しました: ${error.message}`, 'system');
             }
         }
 
         fileInput.addEventListener('change', async function(event) {
             const file = event.target.files[0];
             if (!file) {
-                print("ファイルが選択されませんでした。", 'system');
+                printLog("ファイルが選択されませんでした。", 'system');
                 return;
             }
 
+            const sender = myName || myId;
+
             if (containsInappropriateWords(file.name)) {
-                print("BOT: 不適切なワードを検知しました。", 'system');
-                print(`BOT: 投稿者(${myName || myId})のIDをBANします。`, 'system');
+                printLog("BOT: 不適切なワードを検知しました。", 'system');
+                printLog(`BOT: 投稿者(${sender})のIDをBANします。`, 'system');
                 await fetch('/api/ban-user', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userIdToBan: myName || myId })
+                    body: JSON.stringify({ userIdToBan: sender })
                 });
                 return;
             }
@@ -353,7 +385,7 @@
             formData.append('senderId', myId);
             formData.append('senderName', myName);
 
-            print(`ファイル ${file.name} をアップロードしています...`, 'system');
+            printLog(`ファイル ${file.name} をアップロードしています...`, 'system');
 
             try {
                 const response = await fetch('/api/upload-file', {
@@ -364,12 +396,12 @@
                 const result = await response.json();
 
                 if (response.ok) {
-                    print(`ファイル ${file.name} をアップロードしました。`, 'system');
+                    printLog(`ファイル ${file.name} をアップロードしました。`, 'system');
                 } else {
-                    print(`ファイルのアップロードに失敗しました: ${result.error}`, 'system');
+                    printLog(`ファイルのアップロードに失敗しました: ${result.error}`, 'system');
                 }
             } catch (error) {
-                print(`ファイルのアップロード中にエラーが発生しました: ${error.message}`, 'system');
+                printLog(`ファイルのアップロード中にエラーが発生しました: ${error.message}`, 'system');
             }
 
             fileInput.value = '';
@@ -377,16 +409,15 @@
         });
 
         commandLine.addEventListener('keydown', async function(event) {
-        if (event.key === 'Enter') {
-            const command = commandLine.value.trim();
-            const displayNameForPrompt = myName || myId || 'Anonymous';
-            print(`<div class="line"><span class="prompt">$ ${displayNameForPrompt}: </span><div>${command}</div></div>`);
-            await handleCommand(command);
-            // 入力欄を空にする
-            commandLine.value = '';
-        }
-    });
-        
+            if (event.key === 'Enter') {
+                const command = commandLine.value.trim();
+                const displayNameForPrompt = myName || myId || 'Anonymous';
+                printLog(`<div class="line"><span class="prompt">$ ${displayNameForPrompt}: </span><div>${command}</div></div>`);
+                await handleCommand(command);
+                commandLine.value = '';
+            }
+        });
+
         async function handleCommand(command) {
             const parts = command.split(' ');
             const mainCommand = parts[0].toLowerCase();
@@ -394,8 +425,8 @@
             const fullCommand = command;
 
             if (containsInappropriateWords(fullCommand)) {
-                print("BOT: 不適切なワードを検知しました。", 'system');
-                print(`BOT: 投稿者(${myName || myId})のIDをBANします。`, 'system');
+                printLog("BOT: 不適切なワードを検知しました。", 'system');
+                printLog(`BOT: 投稿者(${myName || myId})のIDをBANします。`, 'system');
                 await fetch('/api/ban-user', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -404,36 +435,13 @@
                 return;
             }
 
-            if (mainCommand === '/ban' && args.length >= 2 && args[1].toLowerCase() === 'release') {
-                if (myName !== 'ゆず') {
-                    print("このコマンドを実行する権限がありません。", 'system');
-                    return;
-                }
-                const userIdToUnban = args[0];
-                try {
-                    const response = await fetch('/api/release-ban', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ senderName: myName, userIdToUnban })
-                    });
-                    const result = await response.json();
-                    if (response.ok) {
-                        print(result.message, 'system');
-                    } else {
-                        print(`BANの解除に失敗しました: ${result.error}`, 'system');
-                    }
-                } catch (error) {
-                    print(`BANの解除中にエラーが発生しました: ${error.message}`, 'system');
-                }
-                return;
-            }
-
-            if (isConnected && myId && fullCommand && !mainCommand.startsWith('/')) {
+            if (mainCommand === '/send' && args.length > 0) {
+                const messageContent = args.join(' ');
                 const sender = myName || myId;
-                const sanitizedContent = fullCommand.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/<script>/g, '');
-
+                const sanitizedContent = messageContent.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/<script>/g, '');
+    
                 if (sanitizedContent.length > 100) {
-                    print("メッセージは100文字以内で入力してください。", 'system');
+                    printLog("メッセージは100文字以内で入力してください。", 'system');
                     return;
                 }
 
@@ -446,37 +454,36 @@
                     const result = await response.json();
 
                     if (response.ok) {
-                        // 投稿成功時にローカルで即時表示
                         displayMessage(result.id, sender, sanitizedContent, new Date().toISOString());
-                        lastMessageId = result.id; // 最新のIDを更新
+                        lastMessageId = result.id;
                     } else {
-                        print(`投稿に失敗しました: ${result.error}`, 'system');
+                        printLog(`投稿に失敗しました: ${result.error}`, 'system');
                     }
                 } catch (error) {
-                    print(`投稿中にエラーが発生しました: ${error.message}`, 'system');
+                    printLog(`投稿中にエラーが発生しました: ${error.message}`, 'system');
                 }
                 return;
             }
 
             switch (mainCommand) {
                 case 'help':
-                    print("利用可能なコマンド:");
-                    print("&nbsp;&nbsp;<b>/disconnect</b> - 掲示板から切断し、更新を停止します。");
-                    print("&nbsp;&nbsp;<b>/id</b>         - あなたのIDと名前を表示します。");
-                    print("&nbsp;&nbsp;<b>/name</b> [新しい名前] - 自分の名前を変更します。");
-                    print("&nbsp;&nbsp;<b>/clear</b>      - データベースのメッセージをすべて削除します。 (パスワードが必要です)");
-                    print("&nbsp;&nbsp;<b>/upload</b>     - ファイルをアップロードします。");
-                    print("&nbsp;&nbsp;<b>/date</b>       - 現在の日本時間をBOTが投稿します。");
-                    print("&nbsp;&nbsp;<b>[メッセージ]</b> - 全員にメッセージを投稿します。");
+                    printLog("利用可能なコマンド:");
+                    printLog("&nbsp;&nbsp;<b>/send</b> [メッセージ] - 全員にメッセージを投稿します。");
+                    printLog("&nbsp;&nbsp;<b>/disconnect</b> - 掲示板から切断し、更新を停止します。");
+                    printLog("&nbsp;&nbsp;<b>/id</b>         - あなたのIDと名前を表示します。");
+                    printLog("&nbsp;&nbsp;<b>/name</b> [新しい名前] - 自分の名前を変更します。");
+                    printLog("&nbsp;&nbsp;<b>/clear</b>      - データベースのメッセージをすべて削除します。 (パスワードが必要です)");
+                    printLog("&nbsp;&nbsp;<b>/upload</b>     - ファイルをアップロードします。");
+                    printLog("&nbsp;&nbsp;<b>/date</b>       - 現在の日本時間をBOTが投稿します。");
                     break;
 
                 case '/id':
                     if (myId) {
-                        print(`あなたのID: ${myId}`, 'system');
+                        printLog(`あなたのID: ${myId}`, 'system');
                         if (myName) {
-                            print(`現在の名前: ${myName}`, 'system');
+                            printLog(`現在の名前: ${myName}`, 'system');
                         } else {
-                            print("名前はまだ設定されていません。", 'system');
+                            printLog("名前はまだ設定されていません。", 'system');
                         }
                     }
                     break;
@@ -485,8 +492,8 @@
                     if (args.length > 0) {
                         const newName = args.join(' ');
                         if (containsInappropriateWords(newName)) {
-                            print("BOT: 不適切なワードを検知しました。", 'system');
-                            print(`BOT: 投稿者(${myName || myId})のIDをBANします。`, 'system');
+                            printLog("BOT: 不適切なワードを検知しました。", 'system');
+                            printLog(`BOT: 投稿者(${myName || myId})のIDをBANします。`, 'system');
                             await fetch('/api/ban-user', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
@@ -495,7 +502,7 @@
                             return;
                         }
                         if (newName.length > 15) {
-                            print("名前は15文字以内で入力してください。", 'system');
+                            printLog("名前は15文字以内で入力してください。", 'system');
                             return;
                         }
 
@@ -507,14 +514,14 @@
                         const { exists } = await response.json();
 
                         if (exists) {
-                            print(`名前'${newName}'はすでに使われています。別の名前を選んでください。`, 'system');
+                            printLog(`名前'${newName}'はすでに使われています。別の名前を選んでください。`, 'system');
                         } else {
                             myName = newName;
                             setCookie('myTerminalName', myName, 365);
-                            print(`名前が'${myName}'に変更されました。`, 'system');
+                            printLog(`名前が'${myName}'に変更されました。`, 'system');
                         }
                     } else {
-                        print("使用方法: /name [新しい名前]", 'system');
+                        printLog("使用方法: /name [新しい名前]", 'system');
                     }
                     break;
 
@@ -522,10 +529,10 @@
                     if (isConnected) {
                         isConnected = false;
                         setCookie('isConnected', 'false', 365);
-                        print("掲示板から切断しました。", 'system');
+                        printLog("掲示板から切断しました。", 'system');
                         stopUpdating();
                     } else {
-                        print("すでに切断されています。", 'system');
+                        printLog("すでに切断されています。", 'system');
                     }
                     break;
 
@@ -540,17 +547,18 @@
 
                         if (response.ok) {
                             terminal.innerHTML = "<div>ようこそ！</div><div>掲示板に接続し、10秒ごとに自動更新を開始しました。</div><div>'help'でコマンドを確認できます。</div><br>";
-                            print("データベースのメッセージをすべて削除しました。", 'system');
+                            messagesContainer.innerHTML = '';
+                            printLog("データベースのメッセージをすべて削除しました。", 'system');
                             lastMessageId = 0;
                             if (isConnected) {
-                                connectToBoard();
-                 　　　　　　　　}
+                              connectToBoard();
+                            }
                         } else {
                             const errorData = await response.json();
-                            print(`クリアに失敗しました: ${errorData.error}`, 'system');
+                            printLog(`クリアに失敗しました: ${errorData.error}`, 'system');
                         }
                     } else {
-                         print("パスワードが入力されませんでした。", 'system');
+                         printLog("パスワードが入力されませんでした。", 'system');
                     }
                     break;
 
@@ -564,20 +572,20 @@
                         const response = await fetch('/api/get-time', { method: 'POST' });
                         if (!response.ok) {
                             const errorData = await response.json();
-                            print(`BOTコマンドの実行に失敗しました: ${errorData.error}`, 'system');
+                            printLog(`BOTコマンドの実行に失敗しました: ${errorData.error}`, 'system');
                         }
                     } catch (error) {
-                        print(`BOTコマンドの実行中にエラーが発生しました: ${error.message}`, 'system');
+                        printLog(`BOTコマンドの実行中にエラーが発生しました: ${error.message}`, 'system');
                     }
                     break;
 
                 case '/ban':
                     if (myName !== 'ゆず') {
-                        print("このコマンドを実行する権限がありません。", 'system');
+                        printLog("このコマンドを実行する権限がありません。", 'system');
                         return;
                     }
                     if (args.length === 0) {
-                        print("使用方法: /ban [ID] (release)", 'system');
+                        printLog("使用方法: /ban [ID] (release)", 'system');
                         return;
                     }
                     const userIdToBan = args[0];
@@ -591,22 +599,22 @@
                         const result = await response.json();
 
                         if (response.ok) {
-                            print(result.message, 'system');
+                            printLog(result.message, 'system');
                         } else {
-                            print(`ユーザーのBANに失敗しました: ${result.error}`, 'system');
+                            printLog(`ユーザーのBANに失敗しました: ${result.error}`, 'system');
                         }
                     } catch (error) {
-                        print(`ユーザーのBAN中にエラーが発生しました: ${error.message}`, 'system');
+                        printLog(`ユーザーのBAN中にエラーが発生しました: ${error.message}`, 'system');
                     }
                     break;
 
                 case '/ip':
                     if (myName !== 'ゆず') {
-                        print("このコマンドを実行する権限がありません。", 'system');
+                        printLog("このコマンドを実行する権限がありません。", 'system');
                         return;
                     }
                     if (args.length === 0) {
-                        print("使用方法: /ip [ID]", 'system');
+                        printLog("使用方法: /ip [ID]", 'system');
                         return;
                     }
                     const userIdToFind = args[0];
@@ -620,20 +628,20 @@
                         const result = await response.json();
 
                         if (!response.ok) {
-                             print(`IPアドレスの取得に失敗しました: ${result.error}`, 'system');
+                             printLog(`IPアドレスの取得に失敗しました: ${result.error}`, 'system');
                         }
                     } catch (error) {
-                        print(`IPアドレスの取得中にエラーが発生しました: ${error.message}`, 'system');
+                        printLog(`IPアドレスの取得中にエラーが発生しました: ${error.message}`, 'system');
                     }
                     break;
 
                 case '/ipban':
                     if (myName !== 'ゆず') {
-                        print("このコマンドを実行する権限がありません。", 'system');
+                        printLog("このコマンドを実行する権限がありません。", 'system');
                         return;
                     }
                     if (args.length === 0) {
-                        print("使用方法: /ipban [IPアドレス]", 'system');
+                        printLog("使用方法: /ipban [IPアドレス]", 'system');
                         return;
                     }
                     const ipAddressToBan = args[0];
@@ -647,18 +655,18 @@
                         const result = await response.json();
 
                         if (response.ok) {
-                             print(result.message, 'system');
+                             printLog(result.message, 'system');
                         } else {
-                            print(`IPアドレスのBANに失敗しました: ${result.error}`, 'system');
+                            printLog(`IPアドレスのBANに失敗しました: ${result.error}`, 'system');
                         }
                     } catch (error) {
-                        print(`IPアドレスのBAN中にエラーが発生しました: ${error.message}`, 'system');
+                        printLog(`IPアドレスのBAN中にエラーが発生しました: ${error.message}`, 'system');
                     }
                     break;
 
                 default:
                     if(fullCommand) {
-                        print(`コマンドが見つかりません: ${fullCommand}. 'help'で利用可能なコマンドを確認してください。`);
+                        printLog(`コマンドが見つかりません: ${fullCommand}. 'help'で利用可能なコマンドを確認してください。`, 'system');
                     }
                     break;
             }
