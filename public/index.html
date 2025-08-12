@@ -377,16 +377,16 @@
         });
 
         commandLine.addEventListener('keydown', async function(event) {
-            if (event.key === 'Enter') {
-                const command = commandLine.value.trim();
-                const displayNameForPrompt = myName || myId || 'Anonymous';
-                print(`<div class="line"><span class="prompt">$ ${displayNameForPrompt}: </span><div>${command}</div></div>`);
-                await handleCommand(command);
-                // メッセージ投稿後にコマンドラインをクリア
-                commandLine.value = '';
-            }
-        });
-
+        if (event.key === 'Enter') {
+            const command = commandLine.value.trim();
+            const displayNameForPrompt = myName || myId || 'Anonymous';
+            print(`<div class="line"><span class="prompt">$ ${displayNameForPrompt}: </span><div>${command}</div></div>`);
+            await handleCommand(command);
+            // 入力欄を空にする
+            commandLine.value = '';
+        }
+    });
+        
         async function handleCommand(command) {
             const parts = command.split(' ');
             const mainCommand = parts[0].toLowerCase();
