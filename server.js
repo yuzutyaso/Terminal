@@ -39,7 +39,6 @@ const getClientIp = (req) => {
     return ip ? ip.split(',')[0].trim() : null;
 };
 
-// 不適切なワードリストを動的に読み込む
 let inappropriateWords = [];
 async function fetchInappropriateWords() {
     try {
@@ -49,16 +48,20 @@ async function fetchInappropriateWords() {
         console.log('Inappropriate words fetched:', inappropriateWords);
     } catch (err) {
         console.error('Failed to fetch inappropriate words:', err);
-        inappropriateWords = []; // 失敗した場合は空リストに
+        inappropriateWords = [];
     }
 }
-// サーバー起動時と定期的にワードリストを更新
 fetchInappropriateWords();
-setInterval(fetchInappropriateWords, 30 * 60 * 1000); // 30分ごとに更新
+setInterval(fetchInappropriateWords, 30 * 60 * 1000);
 
 function containsInappropriateWords(text) {
-    return inappropriateWords.some(word => text.includes(word));
+    if (!text) return false;
+    return inappropriateWords.some(word => text.toLowerCase().includes(word.toLowerCase()));
 }
+
+app.get('/api/get-inappropriate-words', async (req, res) => {
+    res.status(200).json({ words: inappropriateWords });
+});
 
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -73,8 +76,9 @@ app.post('/api/post-message', async (req, res) => {
 
         // サーバーサイドでの不適切なワードチェック
         if (containsInappropriateWords(content)) {
+            // 不適切なワードを検知した場合、即座にbanned_usersにIDを登録
             const { error: banError } = await supabaseAdmin.from('banned_users').insert([{ user_id: sender_id }]);
-            if (banError) {
+            if (banError && banError.code !== '23505') { // 23505はunique_violationエラー
                 console.error('Supabase DB ban-user error:', banError);
             }
             return res.status(403).json({ error: '不適切なワードを検知しました。IDをBANします。' });
@@ -155,6 +159,13 @@ app.post('/api/check-name', async (req, res) => {
         const { name } = req.body;
         if (!name || name.length > 15) {
             return res.status(400).json({ error: '名前は15文字以内で入力してください。' });
+        }
+        if (containsInappropriateWords(name)) {
+            const { error: banError } = await supabaseAdmin.from('banned_users').insert([{ user_id: name }]);
+            if (banError && banError.code !== '23505') {
+                 console.error('Supabase DB ban-user error:', banError);
+            }
+             return res.status(403).json({ error: '不適切なワードが含まれています。' });
         }
         const { data, error } = await supabase.from('messages').select('sender_id').eq('sender_id', name).limit(1);
         if (error) {
@@ -242,7 +253,7 @@ app.post('/api/upload-file', upload.single('file'), async (req, res) => {
                 await fs.unlink(file.path).catch(err => console.error('Failed to unlink file:', err));
             }
             const { error: banError } = await supabaseAdmin.from('banned_users').insert([{ user_id: senderId }]);
-            if (banError) {
+            if (banError && banError.code !== '23505') {
                 console.error('Supabase DB ban-user error:', banError);
             }
             return res.status(403).json({ error: '不適切なワードを検知しました。IDをBANします。' });
@@ -355,7 +366,7 @@ app.post('/api/ban-user', async (req, res) => {
         }
 
         const { error } = await supabaseAdmin.from('banned_users').insert([{ user_id: userIdToBan }]);
-        if (error) {
+        if (error && error.code !== '23505') {
             console.error('Supabase DB ban-user error:', error);
             return res.status(500).json({ error: 'ユーザーのBANに失敗しました。' });
         }
@@ -415,7 +426,7 @@ app.post('/api/ip-ban', async (req, res) => {
         }
         
         const { error } = await supabaseAdmin.from('banned_ips').insert([{ ip_address: ipAddressToBan }]);
-        if (error) {
+        if (error && error.code !== '23505') {
             console.error('Supabase DB ip-ban error:', error);
             return res.status(500).json({ error: 'IPアドレスのBANに失敗しました。' });
         }
