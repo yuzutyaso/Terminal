@@ -204,7 +204,11 @@
 
                 if (data.length > 0) {
                     data.forEach(msg => {
-                        displayMessage(msg.id, msg.sender_id, msg.content, msg.created_at);
+                        // 重複表示を防ぐため、既に表示されているメッセージはスキップ
+                        const existingMessage = document.querySelector(`.message[data-id="${msg.id}"]`);
+                        if (!existingMessage) {
+                             displayMessage(msg.id, msg.sender_id, msg.content, msg.created_at);
+                        }
                     });
                     lastMessageId = data[data.length - 1].id;
                 }
@@ -243,7 +247,12 @@
                 const formattedTime = formatTimestamp(timestamp);
                 messageHtml += `<span class="timestamp">${formattedTime}</span>`;
             }
-            print(messageHtml, className);
+            const newLine = document.createElement('div');
+            newLine.className = className + ' message';
+            newLine.innerHTML = messageHtml;
+            newLine.dataset.id = id;
+            terminal.appendChild(newLine);
+            terminal.scrollTop = terminal.scrollHeight;
         }
 
         function print(message, className = 'message') {
@@ -373,6 +382,7 @@
                 const displayNameForPrompt = myName || myId || 'Anonymous';
                 print(`<div class="line"><span class="prompt">$ ${displayNameForPrompt}: </span><div>${command}</div></div>`);
                 await handleCommand(command);
+                // メッセージ投稿後にコマンドラインをクリア
                 commandLine.value = '';
             }
         });
@@ -436,7 +446,9 @@
                     const result = await response.json();
 
                     if (response.ok) {
+                        // 投稿成功時にローカルで即時表示
                         displayMessage(result.id, sender, sanitizedContent, new Date().toISOString());
+                        lastMessageId = result.id; // 最新のIDを更新
                     } else {
                         print(`投稿に失敗しました: ${result.error}`, 'system');
                     }
@@ -532,7 +544,7 @@
                             lastMessageId = 0;
                             if (isConnected) {
                                 connectToBoard();
-                            }
+                 　　　　　　　　}
                         } else {
                             const errorData = await response.json();
                             print(`クリアに失敗しました: ${errorData.error}`, 'system');
@@ -550,7 +562,7 @@
                 case '/date':
                     try {
                         const response = await fetch('/api/get-time', { method: 'POST' });
-   if (!response.ok) {
+                        if (!response.ok) {
                             const errorData = await response.json();
                             print(`BOTコマンドの実行に失敗しました: ${errorData.error}`, 'system');
                         }
@@ -660,3 +672,8 @@
     </script>
 </body>
 </html>
+
+
+
+
+
