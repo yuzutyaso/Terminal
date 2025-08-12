@@ -247,6 +247,7 @@ app.post('/api/upload-file', upload.single('file'), async (req, res) => {
         const { senderId, senderName } = req.body;
         const file = req.file;
 
+        // 不適切なワードを検知した場合、即座にbanned_usersにIDを登録
         if (containsInappropriateWords(senderName)) {
             if (file) {
                 await fs.unlink(file.path).catch(err => console.error('Failed to unlink file:', err));
