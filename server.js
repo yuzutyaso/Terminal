@@ -80,12 +80,13 @@ app.post('/api/post-message', async (req, res) => {
             return res.status(400).json({ error: '名前は15文字以内で入力してください。' });
         }
 
-        const { error } = await supabase.from('messages').insert([{ sender_id, content, ip_address: clientIp }]);
+        const { data, error } = await supabase.from('messages').insert([{ sender_id, content, ip_address: clientIp }]).select();
         if (error) {
             console.error('Supabase DB insert error:', error);
             return res.status(500).json({ error: 'Failed to post message to database.' });
         }
-        res.status(200).json({ message: 'Message posted successfully' });
+        // 投稿成功時に、新しく作成された投稿のIDを返します
+        res.status(200).json({ message: 'Message posted successfully', id: data[0].id });
     } catch (err) {
         console.error('Server error in /api/post-message:', err);
         res.status(500).json({ error: 'サーバーエラー' });
@@ -279,15 +280,15 @@ app.post('/api/upload-file', upload.single('file'), async (req, res) => {
         const publicUrl = publicUrlData.publicUrl;
         const finalContent = `ファイルがアップロードされました: <a href="${publicUrl}" target="_blank" class="uploaded-file">${file.originalname}</a>`;
 
-        const { error: insertError } = await supabase.from('messages').insert({ sender_id: displayName, content: finalContent, ip_address: clientIp });
+        const { data, error: insertError } = await supabase.from('messages').insert({ sender_id: displayName, content: finalContent, ip_address: clientIp }).select();
 
         if (insertError) {
             console.error('Supabase DB insert error:', insertError);
             await supabaseAdmin.storage.from('uploads').remove([fileName]).catch(err => console.error('Failed to remove uploaded file:', err));
             return res.status(500).json({ error: 'Failed to post message to database.' });
         }
-
-        res.status(200).json({ message: 'File uploaded and message posted successfully.' });
+        // 投稿成功時に、新しく作成された投稿のIDを返します
+        res.status(200).json({ message: 'File uploaded and message posted successfully.', id: data[0].id });
     } catch (err) {
         console.error('Server error during file upload:', err);
         res.status(500).json({ error: 'Server error during file upload.' });
