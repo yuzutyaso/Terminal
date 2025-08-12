@@ -8,6 +8,7 @@ const fs = require('fs/promises');
 
 const app = express();
 
+// 環境変数の設定 (Vercelで設定する)
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -23,6 +24,7 @@ const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 app.use(cors());
 app.use(bodyParser.json());
 
+// 静的ファイルの配信設定
 app.use(express.static('public'));
 
 const UPLOAD_DIR = '/tmp/uploads/';
@@ -34,7 +36,6 @@ fs.mkdir(UPLOAD_DIR, { recursive: true }).catch(err => {
     }
 });
 
-// Helper function to get client IP
 const getClientIp = (req) => {
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
     return ip ? ip.split(',')[0].trim() : null;
@@ -44,7 +45,6 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// 投稿用API
 app.post('/api/post-message', async (req, res) => {
     try {
         const { sender_id, content } = req.body;
@@ -52,7 +52,6 @@ app.post('/api/post-message', async (req, res) => {
             return res.status(400).json({ error: 'sender_id and content are required' });
         }
         
-        // IP BANされているかチェック
         const clientIp = getClientIp(req);
         if (clientIp) {
             const { data: ipBanData, error: ipBanError } = await supabase.from('banned_ips').select('ip_address').eq('ip_address', clientIp).limit(1);
@@ -64,7 +63,6 @@ app.post('/api/post-message', async (req, res) => {
             }
         }
 
-        // ID BANされているかチェック
         const { data: bannedData, error: bannedError } = await supabase.from('banned_users').select('user_id').eq('user_id', sender_id).limit(1);
         if (bannedError) {
              console.error('Supabase DB banned_users select error:', bannedError);
@@ -85,7 +83,6 @@ app.post('/api/post-message', async (req, res) => {
             console.error('Supabase DB insert error:', error);
             return res.status(500).json({ error: 'Failed to post message to database.' });
         }
-        // 投稿成功時に、新しく作成された投稿のIDを返します
         res.status(200).json({ message: 'Message posted successfully', id: data[0].id });
     } catch (err) {
         console.error('Server error in /api/post-message:', err);
@@ -93,7 +90,6 @@ app.post('/api/post-message', async (req, res) => {
     }
 });
 
-// 全メッセージ取得用API
 app.get('/api/get-all-messages', async (req, res) => {
     try {
         const { data, error } = await supabase.from('messages').select('*').order('created_at', { ascending: true });
@@ -108,7 +104,6 @@ app.get('/api/get-all-messages', async (req, res) => {
     }
 });
 
-// 新しいメッセージ取得用API
 app.get('/api/get-new-messages', async (req, res) => {
     try {
         const lastMessageId = parseInt(req.query.lastMessageId);
@@ -127,7 +122,6 @@ app.get('/api/get-new-messages', async (req, res) => {
     }
 });
 
-// 名前重複チェック用API
 app.post('/api/check-name', async (req, res) => {
     try {
         const { name } = req.body;
@@ -146,7 +140,6 @@ app.post('/api/check-name', async (req, res) => {
     }
 });
 
-// メッセージクリア用API
 app.post('/api/clear-messages', async (req, res) => {
     try {
         const { password } = req.body;
@@ -166,7 +159,6 @@ app.post('/api/clear-messages', async (req, res) => {
     }
 });
 
-// cleanup-files API
 app.post('/api/cleanup-files', async (req, res) => {
     try {
         const { data: files, error } = await supabaseAdmin.storage.from('uploads').list();
@@ -209,14 +201,11 @@ app.post('/api/cleanup-files', async (req, res) => {
     }
 });
 
-
-// ファイルアップロード用のAPI
 app.post('/api/upload-file', upload.single('file'), async (req, res) => {
     try {
         const { senderId, senderName } = req.body;
         const file = req.file;
         
-        // IP BANされているかチェック
         const clientIp = getClientIp(req);
         if (clientIp) {
             const { data: ipBanData, error: ipBanError } = await supabase.from('banned_ips').select('ip_address').eq('ip_address', clientIp).limit(1);
@@ -231,7 +220,6 @@ app.post('/api/upload-file', upload.single('file'), async (req, res) => {
             }
         }
         
-        // ID BANされているかチェック
         const { data: bannedData, error: bannedError } = await supabase.from('banned_users').select('user_id').eq('user_id', senderId).limit(1);
         if (bannedError) {
              console.error('Supabase DB banned_users select error:', bannedError);
@@ -287,7 +275,6 @@ app.post('/api/upload-file', upload.single('file'), async (req, res) => {
             await supabaseAdmin.storage.from('uploads').remove([fileName]).catch(err => console.error('Failed to remove uploaded file:', err));
             return res.status(500).json({ error: 'Failed to post message to database.' });
         }
-        // 投稿成功時に、新しく作成された投稿のIDを返します
         res.status(200).json({ message: 'File uploaded and message posted successfully.', id: data[0].id });
     } catch (err) {
         console.error('Server error during file upload:', err);
@@ -295,7 +282,6 @@ app.post('/api/upload-file', upload.single('file'), async (req, res) => {
     }
 });
 
-// 時刻をBOTが投稿するAPI
 app.post('/api/get-time', async (req, res) => {
     try {
         const now = new Date();
@@ -315,7 +301,6 @@ app.post('/api/get-time', async (req, res) => {
     }
 });
 
-// ユーザーをBANするAPI
 app.post('/api/ban-user', async (req, res) => {
     try {
         const { senderName, userIdToBan } = req.body;
@@ -340,7 +325,6 @@ app.post('/api/ban-user', async (req, res) => {
     }
 });
 
-// 指定したIDのユーザーのIPアドレスを取得するAPI
 app.post('/api/get-ip', async (req, res) => {
     try {
         const { senderName, userId } = req.body;
@@ -363,7 +347,6 @@ app.post('/api/get-ip', async (req, res) => {
             return res.status(404).json({ error: '指定されたユーザーIDのIPアドレスは見つかりませんでした。' });
         }
         
-        // 取得したIPアドレスをBOTとして投稿
         const content = `ユーザーID「${userId}」の最新のIPアドレス: ${data.ip_address}`;
         const { error: postError } = await supabase.from('messages').insert([{ sender_id: 'BOT', content }]);
         
@@ -378,7 +361,6 @@ app.post('/api/get-ip', async (req, res) => {
     }
 });
 
-// IPアドレスをBANするAPI
 app.post('/api/ip-ban', async (req, res) => {
     try {
         const { senderName, ipAddressToBan } = req.body;
@@ -403,7 +385,6 @@ app.post('/api/ip-ban', async (req, res) => {
     }
 });
 
-// ユーザーのBANを解除するAPI
 app.post('/api/release-ban', async (req, res) => {
     try {
         const { senderName, userIdToUnban } = req.body;
@@ -427,6 +408,5 @@ app.post('/api/release-ban', async (req, res) => {
         res.status(500).json({ error: 'サーバーエラー' });
     }
 });
-
 
 module.exports = app;
