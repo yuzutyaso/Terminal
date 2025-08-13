@@ -449,20 +449,20 @@
         });
 
         commandLine.addEventListener('keydown', async function(event) {
-            if (event.key === 'Enter') {
-                let command = commandLine.value.trim();
-                const displayNameForPrompt = myName || myId || 'Anonymous';
-                printLog(`<div class="line"><span class="prompt">$ ${displayNameForPrompt}: </span><div>${command}</div></div>`);
-                
-                const canSkipSend = getCookie('canSkipSend') === 'true';
-                if (canSkipSend && command.length > 0 && command[0] !== '/') {
-                    command = `/send ${command}`;
-                }
-
-                await handleCommand(command);
-                commandLine.value = '';
-            }
-        });
+    if (event.key === 'Enter') {
+        let command = commandLine.value.trim();
+        const displayNameForPrompt = myName || myId || 'Anonymous';
+        printLog(`<div class="line"><span class="prompt">$ ${displayNameForPrompt}: </span><div>${command}</div></div>`);
+        
+        const canSkipSend = getCookie('canSkipSend') === 'true';
+        if (canSkipSend && command.length > 0 && command[0] !== '/') {
+            command = `/send ${command}`;
+        }
+        
+        commandLine.value = ''; // ここに移動
+        await handleCommand(command);
+    }
+});
 
         async function handleCommand(command) {
             const parts = command.split(' ');
