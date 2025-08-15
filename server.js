@@ -23,8 +23,6 @@ const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 app.use(cors());
 app.use(bodyParser.json());
 
-app.use(express.static('public'));
-
 const UPLOAD_DIR = '/tmp/uploads/';
 const upload = multer({ dest: UPLOAD_DIR });
 
@@ -33,6 +31,8 @@ fs.mkdir(UPLOAD_DIR, { recursive: true }).catch(err => {
         console.error('Failed to create upload directory:', err);
     }
 });
+
+app.use(express.static('public'));
 
 const getClientIp = (req) => {
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
@@ -58,6 +58,44 @@ function containsInappropriateWords(text) {
     if (!text) return false;
     return inappropriateWords.some(word => text.toLowerCase().includes(word.toLowerCase()));
 }
+
+// --- Topic API ---
+app.post('/api/set-topic', async (req, res) => {
+    try {
+        const { password, topic } = req.body;
+        // 実際のアプリケーションでは、パスワードは環境変数から取得してください
+        const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+
+        if (password !== ADMIN_PASSWORD) {
+            return res.status(401).json({ error: '管理者パスワードが違います。' });
+        }
+
+        const { error } = await supabaseAdmin.from('topic').update({ content: topic }).eq('id', 1);
+        if (error) {
+            console.error('Supabase DB update topic error:', error);
+            return res.status(500).json({ error: 'トピックの更新に失敗しました。' });
+        }
+        res.status(200).json({ message: 'トピックが正常に更新されました。' });
+    } catch (err) {
+        console.error('Server error in /api/set-topic:', err);
+        res.status(500).json({ error: 'サーバーエラー' });
+    }
+});
+
+app.get('/api/get-topic', async (req, res) => {
+    try {
+        const { data, error } = await supabase.from('topic').select('content').eq('id', 1).single();
+        if (error) {
+            console.error('Supabase DB fetch topic error:', error);
+            return res.status(500).json({ error: 'トピックの取得に失敗しました。' });
+        }
+        res.status(200).json({ topic: data.content });
+    } catch (err) {
+        console.error('Server error in /api/get-topic:', err);
+        res.status(500).json({ error: 'サーバーエラー' });
+    }
+});
+// -----------------
 
 app.get('/api/get-inappropriate-words', async (req, res) => {
     res.status(200).json({ words: inappropriateWords });
@@ -93,10 +131,9 @@ app.post('/api/post-message', async (req, res) => {
             return res.status(403).json({ error: 'あなたは投稿を禁止されています。' });
         }
 
-        // 不適切なワードを検知した場合、即座にbanned_usersにIDを登録
         if (containsInappropriateWords(content)) {
             const { error: banError } = await supabaseAdmin.from('banned_users').insert([{ user_id: sender_id }]);
-            if (banError && banError.code !== '23505') { // 23505はunique_violationエラー
+            if (banError && banError.code !== '23505') {
                 console.error('Supabase DB ban-user error:', banError);
             }
             return res.status(403).json({ error: '不適切なワードを検知しました。IDをBANします。' });
@@ -181,8 +218,9 @@ app.post('/api/check-name', async (req, res) => {
 app.post('/api/clear-messages', async (req, res) => {
     try {
         const { password } = req.body;
-        const { data, error } = await supabaseAdmin.from('passwords').select('value').eq('id', 'clear_password').single();
-        if (error || !data || data.value !== password) {
+        const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+
+        if (password !== ADMIN_PASSWORD) {
             return res.status(401).json({ error: 'パスワードが違います' });
         }
         
@@ -356,7 +394,10 @@ app.post('/api/get-time', async (req, res) => {
 app.post('/api/ban-user', async (req, res) => {
     try {
         const { senderName, userIdToBan } = req.body;
-        if (senderName !== 'ゆず') {
+        // 環境変数から管理者名を取得
+        const ADMIN_NAME = process.env.ADMIN_NAME;
+
+        if (senderName !== ADMIN_NAME) {
             return res.status(403).json({ error: 'このコマンドを実行する権限がありません。' });
         }
 
@@ -380,7 +421,9 @@ app.post('/api/ban-user', async (req, res) => {
 app.post('/api/get-ip', async (req, res) => {
     try {
         const { senderName, userId } = req.body;
-        if (senderName !== 'ゆず') {
+        const ADMIN_NAME = process.env.ADMIN_NAME;
+
+        if (senderName !== ADMIN_NAME) {
             return res.status(403).json({ error: 'このコマンドを実行する権限がありません。' });
         }
 
@@ -416,7 +459,9 @@ app.post('/api/get-ip', async (req, res) => {
 app.post('/api/ip-ban', async (req, res) => {
     try {
         const { senderName, ipAddressToBan } = req.body;
-        if (senderName !== 'ゆず') {
+        const ADMIN_NAME = process.env.ADMIN_NAME;
+
+        if (senderName !== ADMIN_NAME) {
             return res.status(403).json({ error: 'このコマンドを実行する権限がありません。' });
         }
 
@@ -440,7 +485,9 @@ app.post('/api/ip-ban', async (req, res) => {
 app.post('/api/release-ban', async (req, res) => {
     try {
         const { senderName, userIdToUnban } = req.body;
-        if (senderName !== 'ゆず') {
+        const ADMIN_NAME = process.env.ADMIN_NAME;
+
+        if (senderName !== ADMIN_NAME) {
             return res.status(403).json({ error: 'このコマンドを実行する権限がありません。' });
         }
 
